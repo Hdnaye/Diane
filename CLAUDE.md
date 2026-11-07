@@ -34,7 +34,11 @@ si l'idée prend.
 - Réponse de l'adhérent :
   - via un lien web personnel, sans compte ni mot de passe ;
   - par SMS : `OUI` / `NON`, suivi du jour du mois (`OUI 15`) quand plusieurs
-    battues sont ouvertes. Messages non reconnus → file « à vérifier ».
+    battues sont ouvertes. Ponctuation, émojis et formules de politesse d'une
+    liste fermée sont tolérés ; tout message ambigu ou conditionnel → file
+    « à vérifier ». Chaque réponse SMS reconnue reçoit un SMS de confirmation
+    reprenant l'interprétation (ex. « Présence OUI enregistrée pour la battue
+    du 15 »), pour que l'adhérent puisse corriger une erreur.
 - L'adhérent peut modifier sa réponse jusqu'à la date limite ; après,
   seul l'organisateur peut la modifier.
 - Saisie/modification manuelle d'une réponse par l'organisateur.
