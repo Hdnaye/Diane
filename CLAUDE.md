@@ -46,6 +46,16 @@ si l'idée prend.
 - Annulation d'une battue avec notification aux adhérents.
 - Export PDF de la liste finale + envoi par e-mail à l'organisateur.
 
+## Accès organisateur (POC)
+- Pas d'écran de connexion. L'app s'authentifie silencieusement auprès du
+  back-end avec une clé secrète longue et aléatoire, envoyée à chaque requête.
+- Toute route ou collection organisateur refuse les requêtes sans cette clé.
+  Seules exceptions publiques : la page de réponse adhérent (accès par jeton
+  d'invitation) et le webhook de la passerelle SMS (authentifié par son propre secret).
+- La clé vit dans des fichiers `.env` non commités (back et app) ; `.env.example`
+  avec une valeur factice. Elle est embarquée dans l'app de démo : acceptable
+  pour le POC, à remplacer par une vraie authentification avant distribution.
+
 ## Hors périmètre (POC)
 - Paiement : se fait en espèces, sur place. Piste future : Stripe / Apple Pay
   vers le compte de l'association.
