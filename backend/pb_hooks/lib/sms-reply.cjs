@@ -29,13 +29,23 @@ const POLITE_PHRASES = Object.freeze([
   "bonne soiree",
 ]);
 
+/**
+ * Courtesy phrases only consistent with a no (user decision): "sorry, yes"
+ * is ambiguous, so it goes to the "to check" queue.
+ */
+const NO_ONLY_PHRASES = Object.freeze(["desole", "desolee"]);
+
 /** Courtesy phrases as word lists, longest first. */
 const POLITE_WORDS = POLITE_PHRASES.map((phrase) => phrase.split(" ")).sort(
   (a, b) => b.length - a.length,
 );
 
-/** Combining diacritical marks, left by NFD normalization. */
-const DIACRITICS = /[\u0300-\u036f]/g;
+/**
+ * Combining marks of French accents, left by NFD normalization: grave,
+ * acute, circumflex, tilde, diaeresis, cedilla. Any other combining mark
+ * (struck through U+0336, slashed U+0338...) makes the reply unrecognized.
+ */
+const FRENCH_ACCENTS = new Set([0x300, 0x301, 0x302, 0x303, 0x308, 0x327]);
 
 /**
  * Closed list of characters treated as word separators, besides whitespace
@@ -90,9 +100,9 @@ function skipPolitePhrases(words, index) {
 function parseSmsReply(text) {
   if (typeof text !== "string") return null;
 
-  const normalized = text
-    .normalize("NFD")
-    .replace(DIACRITICS, "")
+  const normalized = Array.from(text.normalize("NFD"))
+    .filter((char) => !FRENCH_ACCENTS.has(char.codePointAt(0) ?? -1))
+    .join("")
     .toLowerCase();
   // A sign glued to a number ("-3") is not a separator.
   if (/[-+]\d/.test(normalized)) return null;
@@ -121,7 +131,15 @@ function parseSmsReply(text) {
     return null;
   }
 
-  return skipPolitePhrases(words, i) === words.length ? reply : null;
+  if (skipPolitePhrases(words, i) !== words.length) return null;
+  // Every other word is now known to be part of a courtesy phrase.
+  if (
+    answer === "oui" &&
+    words.some((word) => NO_ONLY_PHRASES.includes(word))
+  ) {
+    return null;
+  }
+  return reply;
 }
 
-module.exports = { parseSmsReply, POLITE_PHRASES };
+module.exports = { parseSmsReply, POLITE_PHRASES, NO_ONLY_PHRASES };
