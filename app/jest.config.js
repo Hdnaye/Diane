@@ -4,7 +4,8 @@ module.exports = {
   moduleNameMapper: {
     '\\.css$': '<rootDir>/jest/style-mock.js',
     // The "react-native" entry of lucide is an .mjs file Jest cannot load: use its CommonJS build.
-    '^lucide-react-native$': '<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js',
+    '^lucide-react-native$':
+      '<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js',
   },
   // jest-expo's defaults, plus the untranspiled packages used by reusables, NativeWind and lucide.
   transformIgnorePatterns: [
