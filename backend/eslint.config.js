@@ -1,3 +1,4 @@
+import { defineConfig } from "eslint/config";
 import js from "@eslint/js";
 import vitest from "@vitest/eslint-plugin";
 import globals from "globals";
@@ -21,7 +22,7 @@ const nodeOnlyGlobals = [
   message: `'${name}' is a Node global: PocketBase hooks run in goja, not Node. Use the PocketBase JSVM APIs ($app, $os, $http...) instead.`,
 }));
 
-export default tseslint.config(
+export default defineConfig(
   { ignores: ["bin/", "pb_data/", "node_modules/"] },
   js.configs.recommended,
   tseslint.configs.recommended,

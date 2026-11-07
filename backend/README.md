@@ -6,19 +6,24 @@
 ## Prerequisites
 
 - Linux x86_64 (dev) or arm64 (Raspberry Pi, 64-bit OS).
-- Node.js >= 18.18 and npm (tooling only: PocketBase itself is a single binary).
+- Node.js >= 22 (LTS, see `.nvmrc`; `engines` requires >= 22.13) and npm
+  (tooling only: PocketBase itself is a single binary).
 
 ## Commands
 
 ```sh
-npm install
-npm run setup   # download PocketBase into bin/ and generate pb_data/types.d.ts
-npm run dev     # run PocketBase on http://127.0.0.1:8090 (admin UI: /_/)
-npm test        # unit + integration tests (needs `npm run setup`)
+npm ci
+npm run setup     # download PocketBase into bin/ and generate pb_data/types.d.ts
+npm run dev       # run PocketBase on http://127.0.0.1:8090 (admin UI: /_/)
+npm test          # unit + integration tests
 npm run lint
 npm run typecheck
-npm run format  # or format:check
+npm run format    # or format:check
 ```
+
+`npm test` and `npm run typecheck` need `npm run setup` first: integration
+tests run the PocketBase binary, and the hooks typecheck uses the generated
+`pb_data/types.d.ts`.
 
 Extra flags are forwarded to PocketBase: `npm run dev -- --http=0.0.0.0:8090`.
 

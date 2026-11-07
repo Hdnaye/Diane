@@ -4,6 +4,9 @@ import { createHash } from "node:crypto";
  * Pinned PocketBase version. PocketBase is pre-1.0 and may ship breaking
  * changes between minor versions: bump deliberately, together with the
  * checksums below (from the release's checksums.txt).
+ *
+ * 0.40.6 is the last release published on GitHub: later versions will need
+ * a new download URL (see `resolveAsset`).
  */
 export const POCKETBASE_VERSION = "0.40.6";
 

@@ -15,6 +15,7 @@ import {
   assertSha256,
   resolveAsset,
 } from "./pocketbase-release.js";
+import { runSilently } from "./run-silently.js";
 
 /** @returns {string | undefined} */
 function installedVersion() {
@@ -59,16 +60,13 @@ if (installedVersion() === POCKETBASE_VERSION) {
   );
 }
 
-// Any PocketBase command (re)generates pb_data/types.d.ts.
-execFileSync(
-  POCKETBASE_BIN,
-  [
-    "migrate",
-    "up",
-    `--dir=${DATA_DIR}`,
-    `--hooksDir=${HOOKS_DIR}`,
-    `--migrationsDir=${MIGRATIONS_DIR}`,
-  ],
-  { stdio: "inherit" },
-);
+// Any PocketBase command (re)generates pb_data/types.d.ts. Its output is
+// only shown if it fails.
+runSilently(POCKETBASE_BIN, [
+  "migrate",
+  "up",
+  `--dir=${DATA_DIR}`,
+  `--hooksDir=${HOOKS_DIR}`,
+  `--migrationsDir=${MIGRATIONS_DIR}`,
+]);
 console.log(`Hook typings written to ${path.join(DATA_DIR, "types.d.ts")}`);
