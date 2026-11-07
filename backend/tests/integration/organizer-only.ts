@@ -32,7 +32,11 @@ export function describeOrganizerOnlyAccess(
         token: await superuserToken(),
         body: await validBody(),
       });
-      expect(created.status).toBe(200);
+      if (created.status !== 200) {
+        throw new Error(
+          `Setup failed: HTTP ${created.status} ${JSON.stringify(created.body)}`,
+        );
+      }
       existingId = created.body.id;
     });
 

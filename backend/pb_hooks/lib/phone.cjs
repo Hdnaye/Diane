@@ -7,7 +7,7 @@
  * Separators people type between digit groups: spaces (including
  * non-breaking ones), dots, dashes, slashes.
  */
-const SEPARATORS = /[\s  .\-/]/g;
+const SEPARATORS = /[\s\u00a0\u202f.\-/]/g;
 
 /**
  * Returns `input` as a French E.164 number, or null if it is not one.
