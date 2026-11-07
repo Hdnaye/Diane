@@ -25,8 +25,9 @@ describe("normalizeFrenchPhone", () => {
     expect(normalizeFrenchPhone(input)).toBe("+33639980001");
   });
 
+  // Fictitious landline range reserved by ARCEP (01 99 00 xx xx).
   it("normalizes landlines too", () => {
-    expect(normalizeFrenchPhone("01 23 45 67 89")).toBe("+33123456789");
+    expect(normalizeFrenchPhone("01 99 00 12 34")).toBe("+33199001234");
   });
 
   it.each([
