@@ -7,12 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import prettier from "prettier";
-import {
-  BACKEND_DIR,
-  HOOKS_DIR,
-  MIGRATIONS_DIR,
-  POCKETBASE_BIN,
-} from "./paths.js";
+import { BACKEND_DIR, POCKETBASE_BIN, pocketbaseArgs } from "./paths.js";
 import { runSilently } from "./run-silently.js";
 
 const APP_DIR = path.join(BACKEND_DIR, "..", "app");
@@ -62,13 +57,7 @@ export async function generateTypes(outFile) {
   try {
     const dataDir = path.join(tempDir, "pb_data");
     const rawFile = path.join(tempDir, "pocketbase-types.ts");
-    runSilently(POCKETBASE_BIN, [
-      "migrate",
-      "up",
-      `--dir=${dataDir}`,
-      `--hooksDir=${HOOKS_DIR}`,
-      `--migrationsDir=${MIGRATIONS_DIR}`,
-    ]);
+    runSilently(POCKETBASE_BIN, pocketbaseArgs(["migrate", "up"], { dataDir }));
     // --no-sdk: the app does not depend on the PocketBase JS SDK (yet).
     runSilently(TYPEGEN_BIN, [
       "--db",

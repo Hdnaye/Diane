@@ -9,8 +9,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   HOOKS_DIR,
-  MIGRATIONS_DIR,
   POCKETBASE_BIN,
+  pocketbaseArgs,
 } from "../../scripts/paths.js";
 import { withoutBrowser } from "../../scripts/no-browser.js";
 
@@ -90,29 +90,30 @@ export async function startPocketBase(
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const env = withoutBrowser({ ...process.env, ...options.env });
-  const dirFlags = [
-    `--dir=${dataDir}`,
-    `--hooksDir=${options.hooksDir ?? HOOKS_DIR}`,
-    `--migrationsDir=${MIGRATIONS_DIR}`,
-  ];
+  const dirs = { dataDir, hooksDir: options.hooksDir ?? HOOKS_DIR };
 
   if (options.superuser) {
     await promisify(execFile)(
       POCKETBASE_BIN,
-      [
-        "superuser",
-        "upsert",
-        options.superuser.email,
-        options.superuser.password,
-        ...dirFlags,
-      ],
+      pocketbaseArgs(
+        [
+          "superuser",
+          "upsert",
+          options.superuser.email,
+          options.superuser.password,
+        ],
+        dirs,
+      ),
       { env },
     );
   }
 
   const child = spawn(
     POCKETBASE_BIN,
-    ["serve", `--http=127.0.0.1:${port}`, "--hooksWatch=false", ...dirFlags],
+    pocketbaseArgs(
+      ["serve", `--http=127.0.0.1:${port}`, "--hooksWatch=false"],
+      dirs,
+    ),
     { stdio: ["ignore", "pipe", "pipe"], env },
   );
   let output = "";

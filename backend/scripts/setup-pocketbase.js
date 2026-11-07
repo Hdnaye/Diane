@@ -12,13 +12,7 @@ import {
 import path from "node:path";
 import { parseEnv } from "node:util";
 import { unzipSync } from "fflate";
-import {
-  DATA_DIR,
-  ENV_FILE,
-  HOOKS_DIR,
-  MIGRATIONS_DIR,
-  POCKETBASE_BIN,
-} from "./paths.js";
+import { DATA_DIR, ENV_FILE, POCKETBASE_BIN, pocketbaseArgs } from "./paths.js";
 import {
   POCKETBASE_VERSION,
   assertSha256,
@@ -96,13 +90,7 @@ async function main() {
 
   // Any PocketBase command (re)generates pb_data/types.d.ts. Its output is
   // only shown if it fails.
-  runSilently(POCKETBASE_BIN, [
-    "migrate",
-    "up",
-    `--dir=${DATA_DIR}`,
-    `--hooksDir=${HOOKS_DIR}`,
-    `--migrationsDir=${MIGRATIONS_DIR}`,
-  ]);
+  runSilently(POCKETBASE_BIN, pocketbaseArgs(["migrate", "up"]));
   console.log(`Hook typings written to ${path.join(DATA_DIR, "types.d.ts")}`);
 
   const organizer = organizerEnv();
@@ -113,16 +101,9 @@ async function main() {
     return;
   }
   // Prints neither the email nor the key (the command does not either).
-  runSilently(
-    POCKETBASE_BIN,
-    [
-      "organizer-upsert",
-      `--dir=${DATA_DIR}`,
-      `--hooksDir=${HOOKS_DIR}`,
-      `--migrationsDir=${MIGRATIONS_DIR}`,
-    ],
-    { env: { ...process.env, ...organizer } },
-  );
+  runSilently(POCKETBASE_BIN, pocketbaseArgs(["organizer-upsert"]), {
+    env: { ...process.env, ...organizer },
+  });
   console.log("Organizer account created or updated.");
 }
 
