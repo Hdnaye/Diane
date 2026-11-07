@@ -6,7 +6,7 @@ import { Platform, Text as RNText, type Role } from 'react-native';
 
 const textVariants = cva(
   cn(
-    'text-base text-foreground',
+    'font-sans text-base text-foreground',
     Platform.select({
       web: 'select-text',
     })
@@ -16,21 +16,19 @@ const textVariants = cva(
       variant: {
         default: '',
         h1: cn(
-          'text-center text-4xl font-extrabold tracking-tight',
+          'text-center font-sans-bold text-4xl text-primary',
           Platform.select({ web: 'scroll-m-20 text-balance' })
         ),
         h2: cn(
-          'border-b border-border pb-2 text-3xl font-semibold tracking-tight',
+          'font-sans-bold text-3xl text-primary',
           Platform.select({ web: 'scroll-m-20 first:mt-0' })
         ),
-        h3: cn('text-2xl font-semibold tracking-tight', Platform.select({ web: 'scroll-m-20' })),
-        h4: cn('text-xl font-semibold tracking-tight', Platform.select({ web: 'scroll-m-20' })),
-        p: 'mt-3 leading-7 sm:mt-6',
-        blockquote: 'mt-4 border-l-2 pl-3 italic sm:mt-6 sm:pl-6',
-        code: cn('relative rounded bg-muted px-1 py-0.5 font-mono text-sm font-semibold'),
+        h3: cn('font-sans-bold text-2xl text-primary', Platform.select({ web: 'scroll-m-20' })),
+        h4: cn('font-sans-bold text-xl text-primary', Platform.select({ web: 'scroll-m-20' })),
+        p: 'mt-3 leading-7',
         lead: 'text-xl text-muted-foreground',
-        large: 'text-lg font-semibold',
-        small: 'text-sm font-medium leading-none',
+        large: 'font-sans-bold text-lg',
+        small: 'text-sm leading-none',
         muted: 'text-sm text-muted-foreground',
       },
     },
@@ -49,8 +47,6 @@ const ROLE: Partial<Record<TextVariant, Role>> = {
   h2: 'heading',
   h3: 'heading',
   h4: 'heading',
-  blockquote: Platform.select({ web: 'blockquote' as Role }),
-  code: Platform.select({ web: 'code' as Role }),
 };
 
 const ARIA_LEVEL: Partial<Record<TextVariant, string>> = {
