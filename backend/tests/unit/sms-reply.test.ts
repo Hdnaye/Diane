@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 // Loaded the way PocketBase hooks load it: as a CommonJS module.
 const require = createRequire(import.meta.url);
-const { parseSmsReply, POLITE_PHRASES } =
+const { parseSmsReply, POLITE_PHRASES, NO_ONLY_PHRASES } =
   require("../../pb_hooks/lib/sms-reply.cjs") as typeof import("../../pb_hooks/lib/sms-reply.cjs");
 
 describe("POLITE_PHRASES", () => {
@@ -23,6 +23,80 @@ describe("POLITE_PHRASES", () => {
 
   it("cannot be changed at runtime", () => {
     expect(Object.isFrozen(POLITE_PHRASES)).toBe(true);
+  });
+});
+
+describe("NO_ONLY_PHRASES", () => {
+  it("lists the courtesy phrases only consistent with a no", () => {
+    expect(NO_ONLY_PHRASES).toStrictEqual(["desole", "desolee"]);
+    expect(Object.isFrozen(NO_ONLY_PHRASES)).toBe(true);
+  });
+});
+
+describe("parseSmsReply: apologies", () => {
+  // "Sorry" contradicts a yes: such a reply must be checked by a human.
+  it.each([
+    "Désolé, oui",
+    "désolée oui",
+    "oui désolé",
+    "Oui, désolée !",
+    "oui 15 désolée",
+    "Bonjour, désolé, oui le 15",
+    "oui merci, désolé",
+  ])("rejects an apology with a yes: %j", (text) => {
+    expect(parseSmsReply(text)).toBeNull();
+  });
+
+  it.each([
+    ["Non désolé", "no", undefined],
+    ["désolée non 15", "no", 15],
+    ["Désolé, non merci", "no", undefined],
+    ["Bonjour, non le 3, désolée, bonne soirée", "no", 3],
+  ] as const)("accepts an apology with a no: %j", (text, answer, day) => {
+    expect(parseSmsReply(text)).toStrictEqual(
+      day === undefined ? { answer } : { answer, day },
+    );
+  });
+
+  it.each([
+    ["Merci, oui", "yes"],
+    ["oui bonne journée", "yes"],
+    ["Non merci", "no"],
+    ["non cordialement", "no"],
+  ] as const)(
+    "keeps the other courtesy phrases valid with both answers: %j",
+    (text, answer) => {
+      expect(parseSmsReply(text)).toStrictEqual({ answer });
+    },
+  );
+});
+
+describe("parseSmsReply: combining marks", () => {
+  /** Puts the combining mark `mark` after each character of `text`. */
+  const withMark = (text: string, mark: number) =>
+    Array.from(text, (char) => char + String.fromCharCode(mark)).join("");
+
+  it.each([
+    ["grave", 0x300],
+    ["acute", 0x301],
+    ["circumflex", 0x302],
+    ["tilde", 0x303],
+    ["diaeresis", 0x308],
+    ["cedilla", 0x327],
+  ])("ignores the French %s accent", (_name, mark) => {
+    expect(parseSmsReply(withMark("oui", mark))).toStrictEqual({
+      answer: "yes",
+    });
+  });
+
+  it.each([
+    ["struck-through (U+0336)", withMark("oui", 0x336)],
+    ["slashed (U+0338)", withMark("oui", 0x338)],
+    ["one slashed letter (U+0338)", `no${String.fromCharCode(0x338)}n`],
+    ["underlined (U+0332)", withMark("oui", 0x332)],
+    ["ring above (U+030A)", withMark("oui", 0x30a)],
+  ])("rejects other combining marks: %s", (_name, text) => {
+    expect(parseSmsReply(text)).toBeNull();
   });
 });
 

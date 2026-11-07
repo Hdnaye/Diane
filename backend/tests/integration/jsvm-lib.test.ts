@@ -78,6 +78,15 @@ const SMS_REPLIES = [
   "oui ½",
   "Oui 🙏🏻",
   "Oui ✔️",
+  "Désolé, oui",
+  "oui désolé",
+  "oui 15 désolée",
+  "Non désolé",
+  "désolée non 15",
+  // "oui" with combining marks: struck through, slashed, cedilla.
+  ...[0x336, 0x338, 0x327].map((mark) =>
+    Array.from("oui", (char) => char + String.fromCharCode(mark)).join(""),
+  ),
   "Oui !",
 ];
 
