@@ -12,7 +12,8 @@ import { toDateKey } from '@/lib/dates';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { data: hunts = [] } = useHunts();
+  const huntsQuery = useHunts();
+  const hunts = huntsQuery.data ?? [];
   const [selectedDate, setSelectedDate] = useState<string>();
 
   const today = toDateKey(new Date());
@@ -42,7 +43,18 @@ export default function HomeScreen() {
         <Text>Créer une battue</Text>
       </Button>
       <Text variant="h2">Prochaines battues</Text>
-      {upcoming.length === 0 ? (
+      {huntsQuery.isPending ? (
+        <Text className="text-muted-foreground">Chargement des battues…</Text>
+      ) : huntsQuery.isError ? (
+        <View className="gap-4">
+          <Text role="alert" className="font-sans-bold text-danger">
+            Impossible de charger les battues. Vérifiez la connexion.
+          </Text>
+          <Button variant="secondary" onPress={() => huntsQuery.refetch()}>
+            <Text>Réessayer</Text>
+          </Button>
+        </View>
+      ) : upcoming.length === 0 ? (
         <Text className="text-muted-foreground">Aucune battue prévue.</Text>
       ) : (
         upcoming.map((hunt) => <HuntCard key={hunt.id} hunt={hunt} />)
