@@ -120,3 +120,37 @@ les reviewers ne modifient jamais le code.
 
 ## Contraintes
 - Données personnelles (noms, téléphones, e-mails) : RGPD, hébergement UE.
+
+## Dépôt public : données personnelles (RGPD)
+Le dépôt GitHub est PUBLIC. Tout ce qui est commité est lisible par tous et reste
+dans l'historique même après suppression.
+- Aucune donnée réelle d'adhérent ou d'organisateur dans le dépôt : ni nom, ni
+  téléphone, ni e-mail, ni export (CSV, PDF), ni capture d'écran, ni base
+  PocketBase (`pb_data/`, `*.db`), ni sauvegarde.
+- Données de test et d'exemple uniquement fictives : noms inventés, e-mails en
+  `@example.com` / `@example.org`, numéros de la plage fictive réservée par l'ARCEP
+  (`06 39 98 xx xx` / `+33 6 39 98 xx xx`).
+- Aucune donnée personnelle dans les logs (serveur, app, CI) : journaliser des
+  identifiants techniques (id d'adhérent, d'invitation), jamais le nom, le
+  numéro ou le contenu d'un SMS.
+- Aucune donnée réelle dans les issues, PR, reviews, messages de commit ou
+  artefacts de CI.
+- Minimisation : ne collecter que nom, e-mail et/ou téléphone et les réponses
+  aux battues. Prévoir la suppression complète d'un adhérent (droit à l'effacement).
+- Les jetons des liens de réponse sont aléatoires, non devinables, liés à une
+  seule invitation, et ne contiennent aucune donnée personnelle.
+
+## Secrets
+- Aucun secret dans le dépôt : clés d'API, mots de passe, jetons (passerelle
+  SMS, SMTP/Brevo, Tailscale, superuser PocketBase, GitHub…), clés privées, certificats.
+- Secrets locaux dans des fichiers `.env` jamais commités (couverts par
+  `.gitignore`) ; fournir un `.env.example` avec des valeurs factices.
+- Secrets de CI dans les GitHub Actions secrets, jamais en clair dans les workflows.
+- Côté app : aucun secret dans le code Expo (tout ce qui est embarqué dans l'app
+  ou l'export web est public). Les appels nécessitant un secret passent par le back-end.
+- Les secrets de test sont générés aléatoirement à l'exécution.
+- Si un secret est commité par erreur : le considérer comme compromis, le révoquer
+  et le régénérer immédiatement, prévenir l'utilisateur ; le supprimer de
+  l'historique ne suffit pas.
+- Les reviewers vérifient systématiquement l'absence de secrets et de données
+  personnelles dans chaque PR.
