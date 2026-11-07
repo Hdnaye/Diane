@@ -106,11 +106,6 @@ Agents définis dans `.claude/agents/` : `backend-dev`, `frontend-dev`,
    jusqu'à `VERDICT: APPROVED` ;
 5. attend la confirmation du dev (« Review validée, PR #N prête à merger »),
    puis **demande l'accord de l'utilisateur avant chaque merge** ;
-   **dès qu'une PR apporte un changement visible dans l'app**, lance le serveur
-   Expo sur la branche de la PR (Node 22, `npx expo start --lan` depuis `app/`)
-   et donne à l'utilisateur l'URL `exp://<ip-locale>:8081` à ouvrir dans
-   Expo Go (iPhone, compte Expo connecté) pour qu'il teste avant le merge ;
-   arrête le serveur ensuite ;
 6. merge avec `gh pr merge --merge` (pas de squash : l'historique TDD est conservé)
    et tient l'utilisateur informé de l'avancement.
 
