@@ -43,8 +43,16 @@ npm run format:check
 - Écrans : `src/app/` (expo-router). Tests : `src/__tests__/`.
 - Composants react-native-reusables : `src/components/ui/` (ajout :
   `npx @react-native-reusables/cli@latest add <composant>`).
-- Thème « lisible » (couleurs, tailles de texte, hauteurs tactiles) :
-  `src/theme/tokens.js`, utilisé par `tailwind.config.js`. Aucune valeur en dur dans les composants.
+- Thème « lisible » (couleurs, police, tailles de texte, hauteurs tactiles, arrondis) :
+  `src/theme/tokens.js`, source unique utilisée par `tailwind.config.js`, le thème de navigation
+  (`src/lib/theme.ts`) et le chargement de la police (`src/theme/fonts.ts`). Tailwind ne propose
+  que ces couleurs et tailles : aucune valeur en dur dans les composants.
+- Contrastes : `src/__tests__/theme-contrast.test.ts` vérifie que chaque paire texte/fond du thème
+  atteint 4,5:1 (WCAG AA) ; une couleur qui casse la lisibilité fait échouer les tests.
+  Les couleurs de `app.json` (splash, fond d'icône Android) sont vérifiées contre les tokens.
+- Police : Atkinson Hyperlegible (`font-sans`, `font-sans-bold` ; pas de `font-bold`, chaque
+  graisse est une famille), chargée au démarrage, l'écran de lancement restant affiché d'ici là.
+- Statuts de réponse : `StatusBadge` (icône + libellé, jamais la couleur seule).
 - Les couleurs sont définies directement dans la config Tailwind, sans variables CSS, afin
   d'avoir une seule source (aussi lue par le thème de navigation). `components.json` garde
   quand même `cssVariables: true` : avec `false`, la CLI (basée sur shadcn) remplacerait les
