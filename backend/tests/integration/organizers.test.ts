@@ -133,3 +133,27 @@ describe("organizers collection", () => {
     },
   );
 });
+
+describe("default users collection", () => {
+  // Created by PocketBase with open sign-up: no use here, and an attack
+  // surface (anyone could create an account).
+  it("does not exist", async () => {
+    const response = await api("/api/collections/users/auth-methods");
+
+    expect(response.status).toBe(404);
+  });
+
+  it("refuses anonymous sign-up", async () => {
+    const password = randomSecret();
+    const response = await api(recordsPath("users"), {
+      method: "POST",
+      body: {
+        email: uniqueEmail("intruder"),
+        password,
+        passwordConfirm: password,
+      },
+    });
+
+    expect(response.status).toBe(404);
+  });
+});
