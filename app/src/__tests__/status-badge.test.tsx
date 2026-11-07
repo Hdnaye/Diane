@@ -13,7 +13,10 @@ describe('StatusBadge', () => {
     await render(<StatusBadge status={status} />);
 
     expect(screen.getByText(label)).toBeOnTheScreen();
-    expect(screen.getByTestId('status-badge-icon')).toBeOnTheScreen();
+    // The icon is decorative (hidden from screen readers): the label carries the meaning.
+    expect(
+      screen.getByTestId('status-badge-icon', { includeHiddenElements: true })
+    ).toBeOnTheScreen();
   });
 
   // NativeWind does not compile classes under Jest: theme usage is checked on `className`.
