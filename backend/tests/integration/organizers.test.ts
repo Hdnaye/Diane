@@ -134,6 +134,82 @@ describe("organizers collection", () => {
   );
 });
 
+// Organizer accounts are managed by superusers only: no e-mail flow may
+// reset the key, verify or change the address, whoever asks.
+describe("organizers account e-mail flows", () => {
+  let organizer: Organizer;
+  let collectionId: string;
+
+  beforeAll(async () => {
+    organizer = await createOrganizer();
+    const collection = await api("/api/collections/organizers", {
+      token: await superuserToken(),
+    });
+    collectionId = collection.body.id;
+  });
+
+  const ANONYMOUS_FLOWS = [
+    "request-password-reset",
+    "request-verification",
+  ] as const;
+
+  describe.each(["name", "id"])("addressed by collection %s", (by) => {
+    const base = () =>
+      `/api/collections/${by === "name" ? "organizers" : collectionId}`;
+
+    it.each(ANONYMOUS_FLOWS)(
+      "refuses %s for the organizer's email",
+      async (flow) => {
+        const response = await api(`${base()}/${flow}`, {
+          method: "POST",
+          body: { email: organizer.email },
+        });
+
+        expect(response.status).toBe(403);
+      },
+    );
+
+    // Same answer as for the organizer's email: it cannot be guessed.
+    it.each(ANONYMOUS_FLOWS)(
+      "refuses %s for an unknown email",
+      async (flow) => {
+        const response = await api(`${base()}/${flow}`, {
+          method: "POST",
+          body: { email: uniqueEmail("unknown") },
+        });
+
+        expect(response.status).toBe(403);
+      },
+    );
+
+    it("refuses request-email-change, even to the organizer", async () => {
+      const response = await api(`${base()}/request-email-change`, {
+        method: "POST",
+        token: organizer.token,
+        body: { newEmail: uniqueEmail("new") },
+      });
+
+      expect(response.status).toBe(403);
+    });
+
+    it.each([
+      [
+        "confirm-password-reset",
+        { token: "x", password: "y", passwordConfirm: "y" },
+      ],
+      ["confirm-verification", { token: "x" }],
+      ["confirm-email-change", { token: "x", password: "y" }],
+    ])("refuses %s", async (flow, body) => {
+      const response = await api(`${base()}/${flow}`, {
+        method: "POST",
+        body,
+      });
+
+      expect(response.status).toBe(403);
+    });
+  });
+});
+
 describe("default users collection", () => {
   // Created by PocketBase with open sign-up: no use here, and an attack
   // surface (anyone could create an account).
