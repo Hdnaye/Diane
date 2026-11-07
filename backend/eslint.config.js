@@ -37,7 +37,7 @@ export default defineConfig(
   js.configs.recommended,
   tseslint.configs.recommended,
   {
-    files: ["scripts/**", "src/**", "tests/**", "*.config.*"],
+    files: ["scripts/**", "tests/**", "*.config.*"],
     languageOptions: { globals: globals.node },
   },
   {

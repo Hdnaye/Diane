@@ -27,13 +27,42 @@ tests run the PocketBase binary, and the hooks typecheck uses the generated
 
 Extra flags are forwarded to PocketBase: `npm run dev -- --http=0.0.0.0:8090`.
 
+### First superuser
+
+On a fresh `pb_data/`, PocketBase prints an installer URL to create the first
+superuser. `npm run dev` and the integration tests never let it open a
+browser (PocketBase has no option for that: `scripts/no-browser.js` puts
+no-op `xdg-open`/`open` commands first in its `PATH`). Open the printed URL
+yourself, or create the superuser from the command line:
+
+```sh
+bin/pocketbase superuser upsert EMAIL PASSWORD --dir=pb_data
+```
+
 ## Layout
 
-- `pb_hooks/` — PocketBase JS hooks (`*.pb.js`). They run in PocketBase's
-  embedded JS engine, **not Node**: no `require`, `fs`, `process`... (enforced
-  by ESLint). Typed through `pb_data/types.d.ts`.
-- `pb_migrations/` — PocketBase JS migrations.
-- `src/` — pure business logic, unit tested.
+- `pb_hooks/` (`*.pb.js` hooks) and `pb_migrations/` run in PocketBase's JSVM
+  (goja), **not Node**: no Node modules (`fs`, `path`...), no ESM `import`,
+  no `process`/`Buffer`/`__dirname`; use the PocketBase APIs (`$app`, `$os`,
+  `$http`...). Typed through `pb_data/types.d.ts`.
+- `pb_hooks/lib/*.cjs` — pure business logic (SMS parsing, deadlines, waiting
+  list, message templates...), shared by hooks and unit tests:
+  - CommonJS (`module.exports`) using neither Node nor PocketBase APIs
+    (`$app`...): data in, data out. `.cjs` because `package.json` sets
+    `"type": "module"`; PocketBase only loads `*.pb.js` files as hooks.
+  - Hooks load it through a path rooted at `__hooks` (the JSVM resolves other
+    paths against `node_modules` or the working directory), typed by a cast:
+
+    ```js
+    const { parseSmsReply } =
+      /** @type {typeof import("./lib/sms-reply.cjs")} */ (
+        require(`${__hooks}/lib/sms-reply.cjs`)
+      );
+    ```
+
+  - Unit tests load it with `createRequire(import.meta.url)`. Lib modules
+    require each other by relative path (`require("./other.cjs")`).
+  - These rules are enforced by ESLint.
 - `tests/unit/`, `tests/integration/` — Vitest. Integration tests run against
   a throwaway PocketBase instance (free port, temporary data dir, test
   superuser) started by `tests/integration/pocketbase.global-setup.ts`.
