@@ -38,35 +38,28 @@ const POLITE_WORDS = POLITE_PHRASES.map((phrase) => phrase.split(" ")).sort(
 const DIACRITICS = /[\u0300-\u036f]/g;
 
 /**
- * Code point ranges treated as word separators, besides whitespace:
- * ASCII punctuation except "?" (hesitation), Latin-1 punctuation and
- * symbols (« »...), general punctuation, symbols and dingbats (… ’ – ✅ ❤),
- * variation selector-16 and emojis.
+ * Closed list of characters treated as word separators, besides whitespace
+ * (including non-breaking spaces). Any other character makes the reply
+ * unrecognized: "?", "‽", "🤔", "🤷", "👎", "❌", "≠"... may express doubt
+ * or contradiction. Extend it deliberately, like POLITE_PHRASES.
  *
- * Compared as numbers on purpose: goja compiles regular expressions to Go's
- * RE2, where a surrogate-pair class (emojis) never matches.
- *
- * @type {[from: number, to: number][]}
+ * Code points compared as numbers on purpose: goja compiles regular
+ * expressions to Go's RE2, where a surrogate-pair class (emojis) never
+ * matches.
  */
-const SEPARATOR_RANGES = [
-  [0x21, 0x2f],
-  [0x3a, 0x3e],
-  [0x40, 0x40],
-  [0x5b, 0x60],
-  [0x7b, 0x7e],
-  [0xa1, 0xbe],
-  [0xd7, 0xd7],
-  [0xf7, 0xf7],
-  [0x2000, 0x2bff],
-  [0xfe0f, 0xfe0f],
-  [0x1f000, 0x1faff],
-];
+const SEPARATORS = new Set([
+  // Punctuation: . , ; : ! … ' ’ " « » ( ) - – —
+  0x2e, 0x2c, 0x3b, 0x3a, 0x21, 0x2026, 0x27, 0x2019, 0x22, 0xab, 0xbb, 0x28,
+  0x29, 0x2d, 0x2013, 0x2014,
+  // Positive or neutral emojis: 👍 👌 ✅ ✔ ❤ 🙂 😊 🙏
+  0x1f44d, 0x1f44c, 0x2705, 0x2714, 0x2764, 0x1f642, 0x1f60a, 0x1f64f,
+  // Skin tone modifiers, variation selector-16, zero width joiner.
+  0x1f3fb, 0x1f3fc, 0x1f3fd, 0x1f3fe, 0x1f3ff, 0xfe0f, 0x200d,
+]);
 
 /** @param {string} char A single code point. */
 function isSeparator(char) {
-  if (char.trim() === "") return true;
-  const code = /** @type {number} */ (char.codePointAt(0));
-  return SEPARATOR_RANGES.some(([from, to]) => code >= from && code <= to);
+  return char.trim() === "" || SEPARATORS.has(char.codePointAt(0) ?? -1);
 }
 
 /**
