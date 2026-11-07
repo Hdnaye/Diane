@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -47,5 +47,94 @@ describe("npm run setup", () => {
     expect(result.stderr).toMatch(/migrate up.*failed \(exit code 4\)/);
     expect(result.stderr).not.toMatch(/^\s+at /m);
     expect(result.stderr).not.toContain("node:internal");
+  });
+
+  describe("organizer account", () => {
+    let calls: string;
+    let fakePocketBase: string;
+    let envFile: string;
+
+    beforeEach(async () => {
+      // Installed PocketBase recording each call: arguments, then the
+      // organizer variables it received.
+      calls = path.join(tempDir, "calls");
+      envFile = path.join(tempDir, ".env");
+      fakePocketBase = path.join(tempDir, "pocketbase");
+      await writeFile(
+        fakePocketBase,
+        [
+          "#!/bin/sh",
+          `[ "$1" = "--version" ] && echo "pocketbase version ${POCKETBASE_VERSION}" && exit 0`,
+          `echo "$1 email=$DIANE_ORGANIZER_EMAIL key=$DIANE_ORGANIZER_KEY" >> '${calls}'`,
+        ].join("\n"),
+        { mode: 0o755 },
+      );
+    });
+
+    function setup(env: NodeJS.ProcessEnv = {}) {
+      return spawnSync(process.execPath, ["scripts/setup-pocketbase.js"], {
+        cwd: BACKEND_DIR,
+        env: {
+          ...process.env,
+          POCKETBASE_BIN: fakePocketBase,
+          DIANE_ENV_FILE: envFile,
+          DIANE_ORGANIZER_EMAIL: "",
+          DIANE_ORGANIZER_KEY: "",
+          ...env,
+        },
+        encoding: "utf8",
+      });
+    }
+
+    it("creates or updates it from the .env file, after migrations", async () => {
+      await writeFile(
+        envFile,
+        "DIANE_ORGANIZER_EMAIL=organizer@example.com\nDIANE_ORGANIZER_KEY=fake-key\n",
+      );
+
+      const result = setup();
+
+      expect(result.status, result.stderr).toBe(0);
+      expect((await readFile(calls, "utf8")).split("\n")).toEqual([
+        "migrate email= key=",
+        "organizer-upsert email=organizer@example.com key=fake-key",
+        "",
+      ]);
+    });
+
+    it("prefers variables already set in the environment", async () => {
+      await writeFile(
+        envFile,
+        "DIANE_ORGANIZER_EMAIL=organizer@example.com\nDIANE_ORGANIZER_KEY=fake-key\n",
+      );
+
+      const result = setup({ DIANE_ORGANIZER_KEY: "other-fake-key" });
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(await readFile(calls, "utf8")).toContain(
+        "organizer-upsert email=organizer@example.com key=other-fake-key",
+      );
+    });
+
+    it("is skipped, with a hint, without a .env file", async () => {
+      const result = setup();
+
+      expect(result.status, result.stderr).toBe(0);
+      expect(await readFile(calls, "utf8")).not.toContain("organizer-upsert");
+      expect(result.stdout).toMatch(/\.env\.example/);
+    });
+
+    it("never prints the key", async () => {
+      await writeFile(
+        envFile,
+        "DIANE_ORGANIZER_EMAIL=organizer@example.com\nDIANE_ORGANIZER_KEY=fake-key-value\n",
+      );
+
+      const result = setup();
+
+      expect(`${result.stdout}${result.stderr}`).not.toContain(
+        "fake-key-value",
+      );
+    });
   });
 });

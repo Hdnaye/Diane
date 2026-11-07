@@ -23,6 +23,11 @@ export interface PocketBaseOptions {
   env?: NodeJS.ProcessEnv;
   /** Hooks directory; this project's pb_hooks/ when omitted. */
   hooksDir?: string;
+  /**
+   * Existing data directory, left in place by `stop()`; a temporary one,
+   * deleted by `stop()`, when omitted.
+   */
+  dataDir?: string;
 }
 
 export interface PocketBaseProcess {
@@ -80,7 +85,8 @@ export async function startPocketBase(
     );
   }
 
-  const dataDir = await mkdtemp(path.join(tmpdir(), "diane-pb-test-"));
+  const dataDir =
+    options.dataDir ?? (await mkdtemp(path.join(tmpdir(), "diane-pb-test-")));
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const env = withoutBrowser({ ...process.env, ...options.env });
@@ -119,7 +125,7 @@ export async function startPocketBase(
       child.kill("SIGTERM");
       await exited;
     }
-    await rm(dataDir, { recursive: true, force: true });
+    if (!options.dataDir) await rm(dataDir, { recursive: true, force: true });
   };
 
   try {
