@@ -9,7 +9,7 @@ export const NAV_THEME: Theme = {
     background: colors.background,
     border: colors.border,
     card: colors.card.DEFAULT,
-    notification: colors.destructive.DEFAULT,
+    notification: colors.danger.DEFAULT,
     primary: colors.primary.DEFAULT,
     text: colors.foreground,
   },
