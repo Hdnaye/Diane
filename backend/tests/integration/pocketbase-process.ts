@@ -30,7 +30,7 @@ export interface PocketBaseProcess {
   stop(): Promise<void>;
 }
 
-function freePort(): Promise<number> {
+export function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = createServer();
     server.unref();
@@ -45,7 +45,7 @@ function freePort(): Promise<number> {
   });
 }
 
-async function waitUntilHealthy(
+export async function waitUntilHealthy(
   url: string,
   child: ChildProcess,
   output: () => string,
