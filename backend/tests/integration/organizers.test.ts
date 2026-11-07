@@ -46,7 +46,11 @@ describe("organizers collection", () => {
     const password = randomSecret();
     const response = await api(recordsPath("organizers"), {
       method: "POST",
-      body: { email: uniqueEmail("intruder"), password, passwordConfirm: password },
+      body: {
+        email: uniqueEmail("intruder"),
+        password,
+        passwordConfirm: password,
+      },
     });
 
     expect(response.status).toBe(403);
@@ -59,7 +63,11 @@ describe("organizers collection", () => {
     const created = await api(recordsPath("organizers"), {
       method: "POST",
       token,
-      body: { email: uniqueEmail("other"), password, passwordConfirm: password },
+      body: {
+        email: uniqueEmail("other"),
+        password,
+        passwordConfirm: password,
+      },
     });
     const updated = await api(recordsPath("organizers", id), {
       method: "PATCH",

@@ -125,7 +125,8 @@ export function huntDays(year: number): () => string {
   let next = 0;
   return () => {
     const day = new Date(Date.UTC(year, 0, 1 + next++));
-    if (day.getUTCFullYear() !== year) throw new Error(`Year ${year} exhausted`);
+    if (day.getUTCFullYear() !== year)
+      throw new Error(`Year ${year} exhausted`);
     return day.toISOString().slice(0, 10);
   };
 }
