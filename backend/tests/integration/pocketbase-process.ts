@@ -111,7 +111,14 @@ export async function startPocketBase(
   const child = spawn(
     POCKETBASE_BIN,
     pocketbaseArgs(
-      ["serve", `--http=127.0.0.1:${port}`, "--hooksWatch=false"],
+      [
+        "serve",
+        `--http=127.0.0.1:${port}`,
+        "--hooksWatch=false",
+        // A test changing a collection must not write a migration into
+        // this project's pb_migrations/.
+        "--automigrate=false",
+      ],
       dirs,
     ),
     { stdio: ["ignore", "pipe", "pipe"], env },
