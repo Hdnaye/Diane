@@ -12,6 +12,7 @@ import {
   MIGRATIONS_DIR,
   POCKETBASE_BIN,
 } from "../../scripts/paths.js";
+import { withoutBrowser } from "../../scripts/no-browser.js";
 
 const STARTUP_TIMEOUT_MS = 15_000;
 
@@ -80,7 +81,7 @@ export async function startPocketBase(
   const dataDir = await mkdtemp(path.join(tmpdir(), "diane-pb-test-"));
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
-  const env = { ...process.env, ...options.env };
+  const env = withoutBrowser({ ...process.env, ...options.env });
   const dirFlags = [
     `--dir=${dataDir}`,
     `--hooksDir=${HOOKS_DIR}`,

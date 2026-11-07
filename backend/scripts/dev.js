@@ -8,6 +8,7 @@ import {
   MIGRATIONS_DIR,
   POCKETBASE_BIN,
 } from "./paths.js";
+import { withoutBrowser } from "./no-browser.js";
 
 if (!existsSync(POCKETBASE_BIN)) {
   console.error("PocketBase is not installed: run `npm run setup` first.");
@@ -24,7 +25,8 @@ const pocketbase = spawn(
     `--migrationsDir=${MIGRATIONS_DIR}`,
     ...process.argv.slice(2),
   ],
-  { stdio: "inherit" },
+  // Prints the installer URL instead of opening it when there is no superuser.
+  { stdio: "inherit", env: withoutBrowser(process.env) },
 );
 
 for (const signal of /** @type {const} */ (["SIGINT", "SIGTERM"])) {
