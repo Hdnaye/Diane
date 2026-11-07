@@ -7,7 +7,9 @@
 
 - Linux x86_64 (dev) or arm64 (Raspberry Pi, 64-bit OS).
 - Node.js >= 22 (LTS, see `.nvmrc`; `engines` requires >= 22.13) and npm
-  (tooling only: PocketBase itself is a single binary).
+  (tooling only: PocketBase itself is a single binary). Use the npm bundled
+  with the Node version of `.nvmrc` (npm 10.9.9, see `packageManager`):
+  another npm major rewrites `package-lock.json`.
 
 ## Commands
 

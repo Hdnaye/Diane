@@ -4,6 +4,7 @@
   "private": true,
   "description": "Diane back-end: PocketBase hooks, migrations and pure business logic",
   "type": "module",
+  "packageManager": "npm@10.9.9",
   "engines": {
     "node": ">=22.13"
   },
