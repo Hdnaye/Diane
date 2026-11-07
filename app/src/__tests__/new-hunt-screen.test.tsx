@@ -138,20 +138,59 @@ describe('NewHuntScreen', () => {
     }
   );
 
-  it('requires the answer deadline to be before the hunt and lets it be changed', async () => {
+  it('rounds the default answer deadline up to the next hour', async () => {
+    freezeDate(new Date(2026, 10, 7, 10, 9));
+    await openForm('?date=2026-11-20');
+
+    expect(await screen.findByText('lundi 9 novembre à 11 h 00')).toBeOnTheScreen();
+  });
+
+  it('moves the default deadline to the eve of the hunt at 20 h 00 when 48 hours is too late', async () => {
     const user = userEvent.setup();
-    // Hunt tomorrow at 8 h 00: the default deadline (Monday 10 h 00) is too late.
+    // Hunt tomorrow at 8 h 00: Monday 10 h 00 would be after it.
     const { repository } = await openForm('?date=2026-11-08');
 
+    expect(await screen.findByText('samedi 7 novembre à 20 h 00')).toBeOnTheScreen();
+    await submit(user);
+
+    expect(await screen.findByRole('heading', { name: 'dimanche 8 novembre' })).toBeOnTheScreen();
+    expect(await repository.list()).toContainEqual(
+      expect.objectContaining({
+        date: '2026-11-08',
+        responseDeadline: new Date(2026, 10, 7, 20, 0).toISOString(),
+      })
+    );
+  });
+
+  it('updates the default deadline when another day is chosen', async () => {
+    const user = userEvent.setup();
+    await openForm('?date=2026-11-20');
+    expect(await screen.findByText('lundi 9 novembre à 10 h 00')).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'dimanche 8 novembre 2026' }));
+    expect(screen.getByText('samedi 7 novembre à 20 h 00')).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'mardi 24 novembre 2026' }));
+    expect(screen.getByText('lundi 9 novembre à 10 h 00')).toBeOnTheScreen();
+  });
+
+  it('requires the answer deadline to be before the hunt and lets it be changed', async () => {
+    const user = userEvent.setup();
+    const { repository } = await openForm('?date=2026-11-08');
+    expect(await screen.findByText('samedi 7 novembre à 20 h 00')).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Date limite : un jour plus tard' }));
     await submit(user);
     expect(
       await screen.findByText('La date limite de réponse doit être avant la battue.')
     ).toBeOnTheScreen();
 
-    await user.press(screen.getByRole('button', { name: 'Date limite : un jour plus tôt' }));
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 13; i++) {
       await user.press(screen.getByRole('button', { name: 'Date limite : une heure plus tôt' }));
     }
+    expect(screen.getByText('dimanche 8 novembre à 7 h 00')).toBeOnTheScreen();
+    // A deadline changed by hand is kept when the meeting time changes.
+    await user.press(screen.getByRole('button', { name: 'Rendez-vous : une heure plus tard' }));
     expect(screen.getByText('dimanche 8 novembre à 7 h 00')).toBeOnTheScreen();
     await submit(user);
 
