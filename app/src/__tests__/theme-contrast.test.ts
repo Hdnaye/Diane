@@ -37,6 +37,8 @@ const otherPairs = [
   ['primary', colors.primary.DEFAULT, 'accent-light', colors.accent.light],
   ['muted-foreground', colors.muted.foreground, 'background', colors.background],
   ['muted-foreground', colors.muted.foreground, 'card', colors.card.DEFAULT],
+  // Form error messages.
+  ['danger', colors.danger.DEFAULT, 'background', colors.background],
 ];
 
 describe('theme text/background pairs', () => {
