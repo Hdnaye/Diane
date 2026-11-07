@@ -50,6 +50,9 @@ npm run format:check
 - Contrastes : `src/__tests__/theme-contrast.test.ts` vérifie que chaque paire texte/fond du thème
   atteint 4,5:1 (WCAG AA) ; une couleur qui casse la lisibilité fait échouer les tests.
   Les couleurs de `app.json` (splash, fond d'icône Android) sont vérifiées contre les tokens.
+  Règle : l'accent (`accent`, #4CB572) n'est **jamais** une couleur de texte ni un fond sous du
+  texte blanc (contraste < 4,5:1, vérifié par un cas négatif du même test) ; pour du texte sur
+  fond vert, utiliser `accent-light` avec `text-foreground` ou `text-primary`.
 - Police : Atkinson Hyperlegible (`font-sans`, `font-sans-bold` ; pas de `font-bold`, chaque
   graisse est une famille), chargée au démarrage, l'écran de lancement restant affiché d'ici là.
 - Statuts de réponse : `StatusBadge` (icône + libellé, jamais la couleur seule).
