@@ -8,7 +8,7 @@ import { Text } from '@/components/ui/text';
 import { FIRST_DAY_OF_WEEK } from '@/lib/calendar-locale';
 import { formatLongDay, toDateKey } from '@/lib/dates';
 import { cn } from '@/lib/utils';
-import { colors, fontFamily, fontSize } from '@/theme/tokens';
+import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
 import { remToPx } from '@/theme/units';
 
 export type HuntCalendarProps = {
@@ -21,15 +21,24 @@ export type HuntCalendarProps = {
 };
 
 // Header and day names: the library only accepts raw values, read from the tokens.
+const DAY_WIDTH = remToPx(spacing['touch-min']); // same as the day cells (w-touch-min)
 const CALENDAR_THEME = {
   calendarBackground: colors.card.DEFAULT,
   monthTextColor: colors.primary.DEFAULT,
   textMonthFontFamily: fontFamily['sans-bold'][0],
   textMonthFontSize: remToPx(fontSize.xl[0]),
-  textSectionTitleColor: colors.muted.foreground,
-  textDayHeaderFontFamily: fontFamily['sans-bold'][0],
-  textDayHeaderFontSize: remToPx(fontSize.xs[0]),
   arrowColor: colors.primary.DEFAULT,
+  // Replaces the library's whole `dayHeader` style, whose 32 px width on a single line cuts
+  // the day names ("m…") in the readable font.
+  'stylesheet.calendar.header': {
+    dayHeader: {
+      width: DAY_WIDTH,
+      textAlign: 'center',
+      fontFamily: fontFamily['sans-bold'][0],
+      fontSize: remToPx(fontSize.xs[0]),
+      color: colors.muted.foreground,
+    },
+  },
 };
 
 /** A hunt calendar: French month view, today outlined, hunt days in light green. */
