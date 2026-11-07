@@ -19,7 +19,7 @@ describe.each(["pb_hooks/example.pb.js", "pb_migrations/1_example.js"])(
     it("allows require() of a module under __hooks", async () => {
       expect(
         await ruleIds(
-          "const lib = require(`${__hooks}/lib/sms-reply.cjs`);\nlib;\n",
+          "const lib = require(`${__hooks}/lib/sms-reply.cjs`);\nlib.parseSmsReply('OUI');\n",
           filePath,
         ),
       ).toEqual([]);
