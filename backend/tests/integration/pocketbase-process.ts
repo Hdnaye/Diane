@@ -21,6 +21,8 @@ export interface PocketBaseOptions {
   superuser?: { email: string; password: string };
   /** Extra environment variables for the PocketBase process. */
   env?: NodeJS.ProcessEnv;
+  /** Hooks directory; this project's pb_hooks/ when omitted. */
+  hooksDir?: string;
 }
 
 export interface PocketBaseProcess {
@@ -84,7 +86,7 @@ export async function startPocketBase(
   const env = withoutBrowser({ ...process.env, ...options.env });
   const dirFlags = [
     `--dir=${dataDir}`,
-    `--hooksDir=${HOOKS_DIR}`,
+    `--hooksDir=${options.hooksDir ?? HOOKS_DIR}`,
     `--migrationsDir=${MIGRATIONS_DIR}`,
   ];
 
