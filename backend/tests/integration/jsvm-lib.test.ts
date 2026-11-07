@@ -63,6 +63,22 @@ const SMS_REPLIES = [
   "oui ١٥",
   "oui ７",
   "",
+  "Oui ❓",
+  "Oui ❔",
+  "oui ⁇",
+  "oui ⁉",
+  "oui ‽",
+  "Oui 🤔",
+  "oui 🤷",
+  "oui 🤷‍♂️",
+  "Oui 👎",
+  "Oui ❌",
+  "Oui 🚫",
+  "oui ≠ 15",
+  "oui ½",
+  "Oui 🙏🏻",
+  "Oui ✔️",
+  "Oui !",
 ];
 
 describe("pb_hooks/lib/ in PocketBase's JSVM", () => {

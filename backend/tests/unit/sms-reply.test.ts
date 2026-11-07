@@ -185,6 +185,49 @@ describe("parseSmsReply: tolerated noise", () => {
   ])("rejects unexpected characters or units: %j", (text) => {
     expect(parseSmsReply(text)).toBeNull();
   });
+
+  it.each([
+    "Oui ❓",
+    "Oui ❔",
+    "oui ⁇",
+    "oui ⁉",
+    "oui ‽",
+    "Oui 🤔",
+    "oui 🤷",
+    "oui 🤷‍♂️",
+    "Oui 👎",
+    "Oui ❌",
+    "Oui 🚫",
+    "oui ≠ 15",
+    "oui ½",
+    "Oui 👍 🤔",
+    "oui * 15",
+    "oui / non",
+  ])("rejects symbols and emojis outside the closed list: %j", (text) => {
+    expect(parseSmsReply(text)).toBeNull();
+  });
+
+  it.each([
+    "Oui ; merci",
+    "'Oui'",
+    '"Oui"',
+    "(oui)",
+    "Oui – merci",
+    "Oui — merci",
+    "Oui’",
+    "Oui 👌",
+    "Oui ✔",
+    "Oui ✔️",
+    "Oui 🙂",
+    "Oui 😊",
+    "Oui 🙏🏻",
+    "Oui ❤",
+    "Oui 👍🏿",
+    "Oui !",
+    "Oui !",
+  ])("accepts every separator of the closed list: %j", (text) => {
+    expect(parseSmsReply(text)).toStrictEqual({ answer: "yes" });
+  });
 });
 
 describe("parseSmsReply", () => {
