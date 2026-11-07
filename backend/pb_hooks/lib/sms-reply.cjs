@@ -38,13 +38,36 @@ const POLITE_WORDS = POLITE_PHRASES.map((phrase) => phrase.split(" ")).sort(
 const DIACRITICS = /[\u0300-\u036f]/g;
 
 /**
- * Characters treated as word separators: whitespace, ASCII punctuation
- * except "?" (hesitation), Latin-1 punctuation and symbols (« » …), general
- * punctuation, symbols and dingbats (… ’ – ✅ ❤), variation selector and
- * emojis (surrogate pairs).
+ * Code point ranges treated as word separators, besides whitespace:
+ * ASCII punctuation except "?" (hesitation), Latin-1 punctuation and
+ * symbols (« »...), general punctuation, symbols and dingbats (… ’ – ✅ ❤),
+ * variation selector-16 and emojis.
+ *
+ * Compared as numbers on purpose: goja compiles regular expressions to Go's
+ * RE2, where a surrogate-pair class (emojis) never matches.
+ *
+ * @type {[from: number, to: number][]}
  */
-const SEPARATORS =
-  /[\s!"#$%&'()*+,\-./:;<=>@[\\\]^_`{|}~\u00a1-\u00be\u00d7\u00f7\u2000-\u2bff]|\ufe0f|[\ud83c-\ud83e][\udc00-\udfff]/g;
+const SEPARATOR_RANGES = [
+  [0x21, 0x2f],
+  [0x3a, 0x3e],
+  [0x40, 0x40],
+  [0x5b, 0x60],
+  [0x7b, 0x7e],
+  [0xa1, 0xbe],
+  [0xd7, 0xd7],
+  [0xf7, 0xf7],
+  [0x2000, 0x2bff],
+  [0xfe0f, 0xfe0f],
+  [0x1f000, 0x1faff],
+];
+
+/** @param {string} char A single code point. */
+function isSeparator(char) {
+  if (char.trim() === "") return true;
+  const code = /** @type {number} */ (char.codePointAt(0));
+  return SEPARATOR_RANGES.some(([from, to]) => code >= from && code <= to);
+}
 
 /**
  * Returns the index after the courtesy phrases starting at `index`.
@@ -80,7 +103,10 @@ function parseSmsReply(text) {
     .toLowerCase();
   // A sign glued to a number ("-3") is not a separator.
   if (/[-+]\d/.test(normalized)) return null;
-  const spaced = normalized.replace(SEPARATORS, " ");
+  // Array.from splits by code point (an emoji is a single item).
+  const spaced = Array.from(normalized, (char) =>
+    isSeparator(char) ? " " : char,
+  ).join("");
   // Any other character (question mark, other alphabets, other digits...).
   if (/[^a-z0-9 ]/.test(spaced)) return null;
   const words = spaced.match(/[a-z]+|[0-9]+/g) ?? [];
