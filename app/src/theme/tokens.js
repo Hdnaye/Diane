@@ -51,10 +51,15 @@ const colors = {
   ring: palette.pine,
 };
 
-/** Atkinson Hyperlegible, loaded at startup (src/app/_layout.tsx). Format: [family]. */
+/**
+ * Atkinson Hyperlegible, loaded at startup (src/app/_layout.tsx), then system fallbacks for the
+ * web while the font downloads. Format: [family, ...fallbacks]. NativeWind keeps only the first
+ * entry on native (React Native accepts a single family), which is the loaded font.
+ */
+const fallbackFonts = ['system-ui', 'sans-serif'];
 const fontFamily = {
-  sans: ['AtkinsonHyperlegible_400Regular'],
-  'sans-bold': ['AtkinsonHyperlegible_700Bold'],
+  sans: ['AtkinsonHyperlegible_400Regular', ...fallbackFonts],
+  'sans-bold': ['AtkinsonHyperlegible_700Bold', ...fallbackFonts],
 };
 
 /** Generous type scale: body text ("base") is 20px. Format: [fontSize, lineHeight]. */
