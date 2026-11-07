@@ -94,7 +94,7 @@ describe("npm run setup", () => {
 
       const result = setup();
 
-      expect(result.status, result.stderr).toBe(0);
+      expect(result.status).toBe(0);
       expect((await readFile(calls, "utf8")).split("\n")).toEqual([
         "migrate email= key=",
         "organizer-upsert email=organizer@example.com key=fake-key",
@@ -110,7 +110,7 @@ describe("npm run setup", () => {
 
       const result = setup({ DIANE_ORGANIZER_KEY: "other-fake-key" });
 
-      expect(result.status, result.stderr).toBe(0);
+      expect(result.status).toBe(0);
       expect(await readFile(calls, "utf8")).toContain(
         "organizer-upsert email=organizer@example.com key=other-fake-key",
       );
@@ -119,7 +119,7 @@ describe("npm run setup", () => {
     it("is skipped, with a hint, without a .env file", async () => {
       const result = setup();
 
-      expect(result.status, result.stderr).toBe(0);
+      expect(result.status).toBe(0);
       expect(await readFile(calls, "utf8")).not.toContain("organizer-upsert");
       expect(result.stdout).toMatch(/\.env\.example/);
     });

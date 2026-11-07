@@ -12,6 +12,10 @@ migrate(
       viewRule: "id = @request.auth.id",
       // createRule, updateRule, deleteRule left null: superusers only.
     });
+    collection.fields.add(
+      new AutodateField({ name: "created", onCreate: true }),
+      new AutodateField({ name: "updated", onCreate: true, onUpdate: true }),
+    );
     collection.passwordAuth.enabled = true;
     collection.passwordAuth.identityFields = ["email"];
     collection.oauth2.enabled = false;

@@ -87,7 +87,7 @@ describe("pocketbase organizer-upsert", () => {
 
     const result = upsert(email, secret);
 
-    expect(result.status, result.stderr).toBe(0);
+    expect(result.status).toBe(0);
     const [auth] = await authenticate([{ email, key: secret }]);
     expect(auth).not.toBeNull();
   });
@@ -99,7 +99,7 @@ describe("pocketbase organizer-upsert", () => {
 
     const result = upsert(email, newKey);
 
-    expect(result.status, result.stderr).toBe(0);
+    expect(result.status).toBe(0);
     const [withOld, withNew] = await authenticate([
       { email, key: oldKey },
       { email, key: newKey },
@@ -117,7 +117,7 @@ describe("pocketbase organizer-upsert", () => {
 
     const result = upsert(newEmail, newKey);
 
-    expect(result.status, result.stderr).toBe(0);
+    expect(result.status).toBe(0);
     const [withOld, withNew] = await authenticate([
       { email, key: oldKey },
       { email: newEmail, key: newKey },

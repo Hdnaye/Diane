@@ -7,9 +7,10 @@ import path from "node:path";
  *
  * @param {string} file
  * @param {string[]} args
+ * @param {{ env?: NodeJS.ProcessEnv }} [options]
  */
-export function runSilently(file, args) {
-  const result = spawnSync(file, args, { encoding: "utf8" });
+export function runSilently(file, args, options = {}) {
+  const result = spawnSync(file, args, { encoding: "utf8", env: options.env });
   if (result.error) throw result.error;
   if (result.status !== 0) {
     process.stderr.write(`${result.stdout}${result.stderr}`);

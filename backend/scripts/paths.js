@@ -15,3 +15,7 @@ export const POCKETBASE_BIN =
 export const DATA_DIR = path.join(BACKEND_DIR, "pb_data");
 export const HOOKS_DIR = path.join(BACKEND_DIR, "pb_hooks");
 export const MIGRATIONS_DIR = path.join(BACKEND_DIR, "pb_migrations");
+
+/** Local secrets (not committed, see .env.example). */
+export const ENV_FILE =
+  process.env.DIANE_ENV_FILE ?? path.join(BACKEND_DIR, ".env");
