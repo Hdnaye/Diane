@@ -12,10 +12,7 @@ describe('contrastRatio', () => {
   });
 
   it('does not depend on the order of the colors', () => {
-    expect(contrastRatio('#10231D', '#A1D8B5')).toBeCloseTo(
-      contrastRatio('#A1D8B5', '#10231D'),
-      5
-    );
+    expect(contrastRatio('#10231D', '#A1D8B5')).toBeCloseTo(contrastRatio('#A1D8B5', '#10231D'), 5);
   });
 });
 

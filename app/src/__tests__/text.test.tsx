@@ -21,7 +21,11 @@ describe('Text', () => {
   ] as const)('announces a %s as a heading of level %i', async (variant, level) => {
     await render(<Text variant={variant}>Battues à venir</Text>);
 
-    expect(screen.getByRole('heading', { name: 'Battues à venir', level })).toBeOnTheScreen();
+    // RNTL has no `level` option: the level is read from `aria-level`.
+    expect(screen.getByRole('heading', { name: 'Battues à venir' })).toHaveProp(
+      'aria-level',
+      String(level)
+    );
   });
 
   it('sets titles in the bold face and the primary color', async () => {
