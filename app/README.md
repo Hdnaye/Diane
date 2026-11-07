@@ -45,3 +45,9 @@ npm run format:check
   `npx @react-native-reusables/cli@latest add <composant>`).
 - Thème « lisible » (couleurs, tailles de texte, hauteurs tactiles) :
   `src/theme/tokens.js`, utilisé par `tailwind.config.js`. Aucune valeur en dur dans les composants.
+- Les couleurs sont définies directement dans la config Tailwind, sans variables CSS, afin
+  d'avoir une seule source (aussi lue par le thème de navigation). `components.json` garde
+  quand même `cssVariables: true` : avec `false`, la CLI (basée sur shadcn) remplacerait les
+  classes sémantiques des composants ajoutés (`bg-primary`…) par des couleurs fixes et
+  contournerait le thème. Conséquence attendue : `reusables doctor` signale 3 « variables
+  CSS manquantes », à ignorer.
