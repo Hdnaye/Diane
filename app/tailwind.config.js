@@ -7,7 +7,6 @@ module.exports = {
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
-      colors: tokens.colors,
       spacing: tokens.spacing,
       borderRadius: tokens.borderRadius,
       borderWidth: {
@@ -28,7 +27,10 @@ module.exports = {
         'accordion-up': 'accordion-up 0.2s ease-out',
       },
     },
-    // Replaces (not extends) the default scale so every text is readable by default.
+    // Replace (not extend) the defaults: only the theme's colors, fonts and readable text
+    // sizes exist, so a component cannot use an off-palette color or an unreadable size.
+    colors: tokens.colors,
+    fontFamily: tokens.fontFamily,
     fontSize: tokens.fontSize,
   },
   future: {

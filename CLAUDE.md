@@ -34,13 +34,27 @@ si l'idée prend.
 - Réponse de l'adhérent :
   - via un lien web personnel, sans compte ni mot de passe ;
   - par SMS : `OUI` / `NON`, suivi du jour du mois (`OUI 15`) quand plusieurs
-    battues sont ouvertes. Messages non reconnus → file « à vérifier ».
+    battues sont ouvertes. Ponctuation, émojis et formules de politesse d'une
+    liste fermée sont tolérés ; tout message ambigu ou conditionnel → file
+    « à vérifier ». Chaque réponse SMS reconnue reçoit un SMS de confirmation
+    reprenant l'interprétation (ex. « Présence OUI enregistrée pour la battue
+    du 15 »), pour que l'adhérent puisse corriger une erreur.
 - L'adhérent peut modifier sa réponse jusqu'à la date limite ; après,
   seul l'organisateur peut la modifier.
 - Saisie/modification manuelle d'une réponse par l'organisateur.
 - Relance automatique des non-répondants 24 h avant la date limite.
 - Annulation d'une battue avec notification aux adhérents.
 - Export PDF de la liste finale + envoi par e-mail à l'organisateur.
+
+## Accès organisateur (POC)
+- Pas d'écran de connexion. L'app s'authentifie silencieusement auprès du
+  back-end avec une clé secrète longue et aléatoire, envoyée à chaque requête.
+- Toute route ou collection organisateur refuse les requêtes sans cette clé.
+  Seules exceptions publiques : la page de réponse adhérent (accès par jeton
+  d'invitation) et le webhook de la passerelle SMS (authentifié par son propre secret).
+- La clé vit dans des fichiers `.env` non commités (back et app) ; `.env.example`
+  avec une valeur factice. Elle est embarquée dans l'app de démo : acceptable
+  pour le POC, à remplacer par une vraie authentification avant distribution.
 
 ## Hors périmètre (POC)
 - Paiement : se fait en espèces, sur place. Piste future : Stripe / Apple Pay

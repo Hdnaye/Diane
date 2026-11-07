@@ -14,8 +14,8 @@ React Native API:
 
 ## Expo Go only
 
-The app runs in Expo Go: never add a native module outside the Expo SDK. Prefer modules that
-also work on web.
+The app runs in Expo Go: only modules bundled in Expo Go (Expo SDK) or pure JS. Prefer modules
+that also work on web.
 
 ## Commands
 
