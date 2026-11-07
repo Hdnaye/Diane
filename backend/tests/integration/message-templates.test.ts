@@ -115,6 +115,33 @@ describe("message_templates", () => {
     expect(updated.status).toBe(200);
     expect((await defaults()).map(({ id }) => id)).toEqual([created.body.id]);
   });
+
+  it("keeps the default template when an invalid one is created as default", async () => {
+    const before = (await defaults()).map(({ id }) => id);
+    expect(before).toHaveLength(1);
+
+    const response = await create({ name: "", body: "x", is_default: true });
+
+    expect(response.status).toBe(400);
+    expect((await defaults()).map(({ id }) => id)).toEqual(before);
+  });
+
+  it("keeps the default template when an invalid update makes another one the default", async () => {
+    const other = await create({
+      name: "Brouillon",
+      body: "Battue le {date}.",
+    });
+    const before = (await defaults()).map(({ id }) => id);
+    expect(before).toHaveLength(1);
+
+    const response = await api(
+      recordsPath("message_templates", other.body.id),
+      { method: "PATCH", token, body: { name: "", is_default: true } },
+    );
+
+    expect(response.status).toBe(400);
+    expect((await defaults()).map(({ id }) => id)).toEqual(before);
+  });
 });
 
 describeOrganizerOnlyAccess(
