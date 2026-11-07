@@ -19,9 +19,20 @@ export class HuntDayTakenError extends Error {
 }
 
 /** In-memory implementation, used until the PocketBase collections exist. */
-export function createInMemoryHuntRepository(_initial: Hunt[] = []): HuntRepository {
+export function createInMemoryHuntRepository(initial: Hunt[] = []): HuntRepository {
+  const hunts = [...initial];
+  let nextId = 1;
   return {
-    list: async () => [],
-    create: async (hunt) => ({ ...hunt, id: '' }),
+    async list() {
+      return [...hunts].sort((a, b) => a.date.localeCompare(b.date));
+    },
+    async create(newHunt) {
+      if (hunts.some((existing) => existing.date === newHunt.date)) {
+        throw new HuntDayTakenError(newHunt.date);
+      }
+      const hunt = { ...newHunt, id: `local-${nextId++}` };
+      hunts.push(hunt);
+      return hunt;
+    },
   };
 }
