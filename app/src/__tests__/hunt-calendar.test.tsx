@@ -2,6 +2,8 @@ import { render, screen, userEvent } from '@testing-library/react-native';
 
 import { HuntCalendar } from '@/components/hunt-calendar';
 import { freezeDate, unfreezeDate } from '@/test-utils/clock';
+import { colors, fontFamily, spacing } from '@/theme/tokens';
+import { remToPx } from '@/theme/units';
 
 // Saturday 7 November 2026, 10:00.
 const TODAY = new Date(2026, 10, 7, 10, 0);
@@ -28,6 +30,20 @@ describe('HuntCalendar', () => {
       'sam.',
       'dim.',
     ]);
+  });
+
+  it('gives each day name the width of a day, so "mer." is not cut to "m…"', async () => {
+    await render(<HuntCalendar huntDates={[]} onSelectDate={jest.fn()} />);
+
+    // The library sets 32 px on one line, too narrow for the bold readable font.
+    const dayWidth = remToPx(spacing['touch-min']);
+    for (const name of screen.getAllByText(/^(lun|mar|mer|jeu|ven|sam|dim)\.$/, {
+      includeHiddenElements: true,
+    })) {
+      expect(name).toHaveStyle({ width: dayWidth });
+      expect(name).toHaveStyle({ fontFamily: fontFamily['sans-bold'][0] });
+      expect(name).toHaveStyle({ color: colors.muted.foreground });
+    }
   });
 
   it('marks today so it can be spotted', async () => {
