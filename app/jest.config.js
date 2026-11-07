@@ -1,6 +1,9 @@
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'jest-expo',
+  moduleNameMapper: {
+    '\\.css$': '<rootDir>/jest/style-mock.js',
+  },
   // jest-expo's defaults, plus the untranspiled packages used by reusables, NativeWind and lucide.
   transformIgnorePatterns: [
     '/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|standard-navigation|@rn-primitives|nativewind|react-native-css-interop|lucide-react-native))',
