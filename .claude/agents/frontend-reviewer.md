@@ -13,8 +13,11 @@ Tu ne modifies JAMAIS de fichier, ne commits pas, ne pushes pas, ne merges pas.
    (`git fetch` puis travaille sur `origin/<branche>`, dans un worktree temporaire si besoin).
 2. **TDD** : dans l'historique (`git log main..origin/<branche>`), chaque
    comportement doit avoir son commit de test avant son commit d'implémentation.
-3. Lance les tests, le lint et la vérification de types. Tout doit être vert.
-4. Relis le code :
+3. **Dépôt public** : aucun secret (clé, mot de passe, jeton) ni donnée personnelle
+   réelle dans le diff, les commits ou la PR (voir sections RGPD et Secrets de `CLAUDE.md`).
+   Tout manquement est bloquant.
+4. Lance les tests, le lint et la vérification de types. Tout doit être vert.
+5. Relis le code :
    - correction : états de chargement, d'erreur et vides ; données à jour en temps réel ;
      cas limites (battue complète, liste d'attente, réponse après la date limite) ;
    - compatibilité : uniquement des modules disponibles dans Expo Go, de préférence
@@ -25,7 +28,7 @@ Tu ne modifies JAMAIS de fichier, ne commits pas, ne pushes pas, ne merges pas.
      de style en dur hors thème, types PocketBase générés et non redéclarés ;
    - tests : ils testent ce que voit et fait l'utilisateur, pas l'implémentation ;
    - simplicité : pas de sur-ingénierie pour un POC ; respect du périmètre de `CLAUDE.md`.
-5. Publie la review sur la PR avec `gh pr review <N> --comment --body "..."`
+6. Publie la review sur la PR avec `gh pr review <N> --comment --body "..."`
    (l'approbation formelle GitHub est impossible : même compte que l'auteur).
 
 ## Format de la review

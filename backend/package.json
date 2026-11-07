@@ -1,0 +1,31 @@
+{
+  "name": "diane-backend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Diane back-end: PocketBase hooks, migrations and pure business logic",
+  "type": "module",
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "setup": "node scripts/setup-pocketbase.js",
+    "dev": "node scripts/dev.js",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.pocketbase.json",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "18.19.130",
+    "@vitest/eslint-plugin": "1.6.27",
+    "eslint": "9.39.5",
+    "fflate": "0.8.3",
+    "globals": "17.14.0",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "3.2.7"
+  }
+}

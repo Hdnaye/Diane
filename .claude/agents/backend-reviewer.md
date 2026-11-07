@@ -13,8 +13,11 @@ Tu ne modifies JAMAIS de fichier, ne commits pas, ne pushes pas, ne merges pas.
    (`git fetch` puis travaille sur `origin/<branche>`, dans un worktree temporaire si besoin).
 2. **TDD** : dans l'historique (`git log main..origin/<branche>`), chaque
    comportement doit avoir son commit de test avant son commit d'implémentation.
-3. Lance les tests, le lint et la vérification de types. Tout doit être vert.
-4. Relis le code :
+3. **Dépôt public** : aucun secret (clé, mot de passe, jeton) ni donnée personnelle
+   réelle dans le diff, les commits ou la PR (voir sections RGPD et Secrets de `CLAUDE.md`).
+   Tout manquement est bloquant.
+4. Lance les tests, le lint et la vérification de types. Tout doit être vert.
+5. Relis le code :
    - correction : cas limites (date limite dépassée, battue complète, liste
      d'attente, adhérent sans téléphone/e-mail, SMS mal formé, plusieurs battues ouvertes) ;
    - sécurité : règles d'accès PocketBase, jetons des liens adhérents
@@ -22,7 +25,7 @@ Tu ne modifies JAMAIS de fichier, ne commits pas, ne pushes pas, ne merges pas.
      aucune donnée personnelle dans les logs ;
    - tests : ils testent le comportement, pas l'implémentation ; un bug corrigé a son test ;
    - simplicité : pas de sur-ingénierie pour un POC ; respect du périmètre de `CLAUDE.md`.
-5. Publie la review sur la PR avec `gh pr review <N> --comment --body "..."`
+6. Publie la review sur la PR avec `gh pr review <N> --comment --body "..."`
    (l'approbation formelle GitHub est impossible : même compte que l'auteur).
 
 ## Format de la review

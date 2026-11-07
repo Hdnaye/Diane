@@ -1,0 +1,23 @@
+# Secrets (see CLAUDE.md, "Secrets")
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.keystore
+*.jks
+
+# Personal data and databases (see CLAUDE.md, RGPD section)
+pb_data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+backups/
+exports/
+*.csv
+
+# Claude Code worktrees
+.claude/worktrees/
