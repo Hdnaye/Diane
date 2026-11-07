@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 import { beforeAll, describe, expect, it } from "vitest";
 import { api, createOrganizer, recordsPath, type ApiResponse } from "./api.js";
@@ -118,6 +119,9 @@ describe("message_templates", () => {
 
 describeOrganizerOnlyAccess(
   "message_templates",
-  async () => ({ name: "Relance", body: "Rappel : battue le {date}." }),
+  async () => ({
+    name: `Relance ${randomBytes(4).toString("hex")}`,
+    body: "Rappel : battue le {date}.",
+  }),
   async () => ({ body: "Rappel : battue le {date} à {heure}." }),
 );

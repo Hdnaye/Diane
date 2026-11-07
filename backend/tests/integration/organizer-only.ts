@@ -24,13 +24,15 @@ export function describeOrganizerOnlyAccess(
     let organizer: Organizer;
     /** Record created by a superuser, which anonymous requests must not reach. */
     let existingId: string;
+    let existingBody: Record<string, unknown>;
 
     beforeAll(async () => {
       organizer = await createOrganizer();
+      existingBody = await validBody();
       const created = await api(recordsPath(collection), {
         method: "POST",
         token: await superuserToken(),
-        body: await validBody(),
+        body: existingBody,
       });
       if (created.status !== 200) {
         throw new Error(
@@ -40,10 +42,18 @@ export function describeOrganizerOnlyAccess(
       existingId = created.body.id;
     });
 
-    async function count(): Promise<number> {
-      const list = await api(`${recordsPath(collection)}?perPage=1`, {
-        token: await superuserToken(),
-      });
+    /**
+     * Number of records with every field of `body` (bodies are unique: other
+     * test files create records concurrently).
+     */
+    async function matching(body: Record<string, unknown>): Promise<number> {
+      const filter = Object.entries(body)
+        .map(([field, value]) => `${field}=${JSON.stringify(value)}`)
+        .join(" && ");
+      const list = await api(
+        `${recordsPath(collection)}?perPage=1&filter=${encodeURIComponent(filter)}`,
+        { token: await superuserToken() },
+      );
       return list.body.totalItems;
     }
 
@@ -75,16 +85,18 @@ export function describeOrganizerOnlyAccess(
     });
 
     it("refuses anonymous creation", async () => {
-      const before = await count();
+      const body = await validBody();
 
       const response = await api(recordsPath(collection), {
         method: "POST",
-        body: await validBody(),
+        body,
       });
 
       expect(response.status).toBeGreaterThanOrEqual(400);
       expect(response.status).toBeLessThan(500);
-      expect(await count()).toBe(before);
+      expect(await matching(body)).toBe(0);
+      // The check itself finds records.
+      expect(await matching(existingBody)).toBe(1);
     });
 
     it("lets an organizer create, list, view, update and delete", async () => {
