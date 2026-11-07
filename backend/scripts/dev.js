@@ -2,12 +2,7 @@
 // Extra arguments are forwarded, e.g. `npm run dev -- --http=0.0.0.0:8090`.
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import {
-  DATA_DIR,
-  HOOKS_DIR,
-  MIGRATIONS_DIR,
-  POCKETBASE_BIN,
-} from "./paths.js";
+import { POCKETBASE_BIN, pocketbaseArgs } from "./paths.js";
 import { withoutBrowser } from "./no-browser.js";
 
 if (!existsSync(POCKETBASE_BIN)) {
@@ -17,14 +12,8 @@ if (!existsSync(POCKETBASE_BIN)) {
 
 const pocketbase = spawn(
   POCKETBASE_BIN,
-  [
-    "serve",
-    "--dev",
-    `--dir=${DATA_DIR}`,
-    `--hooksDir=${HOOKS_DIR}`,
-    `--migrationsDir=${MIGRATIONS_DIR}`,
-    ...process.argv.slice(2),
-  ],
+  // Without dev mode: it would print members' personal data (SQL values).
+  [...pocketbaseArgs(["serve"]), ...process.argv.slice(2)],
   // Prints the installer URL instead of opening it when there is no superuser.
   { stdio: "inherit", env: withoutBrowser(process.env) },
 );
