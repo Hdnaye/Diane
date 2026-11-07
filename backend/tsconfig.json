@@ -1,0 +1,19 @@
+{
+  // Node side: setup/dev scripts, pure logic (src/), tests and tool configs.
+  // PocketBase JS (pb_hooks/, pb_migrations/) is checked by tsconfig.pocketbase.json.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["scripts", "src", "tests", "*.config.js", "*.config.ts"]
+}
