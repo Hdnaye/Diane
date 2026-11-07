@@ -12,5 +12,10 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["pb_hooks", "pb_migrations", "pb_data/types.d.ts"]
+  "include": [
+    "pb_hooks",
+    "pb_migrations",
+    "pb_data/types.d.ts",
+    "types/pocketbase-jsvm.d.ts"
+  ]
 }

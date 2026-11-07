@@ -43,6 +43,11 @@ export default tseslint.config(
     },
     rules: {
       "no-undef": "off",
+      // `import` is unavailable here: types come from a triple-slash reference.
+      "@typescript-eslint/triple-slash-reference": [
+        "error",
+        { path: "always" },
+      ],
       "no-restricted-globals": ["error", ...nodeOnlyGlobals],
       "no-restricted-syntax": [
         "error",
