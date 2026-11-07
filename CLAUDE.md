@@ -71,8 +71,50 @@ si l'idée prend.
 ## Conventions
 - Code, nommage et commentaires en anglais ; interface utilisateur en français.
 
+## Librairies front
+- Styles : NativeWind. Couleurs, tailles et espacements définis une seule fois
+  dans la config (thème « lisible » : texte de base généreux, boutons hauts,
+  contrastes forts).
+- Composants : react-native-reusables (shadcn/ui pour React Native), copiés dans
+  le projet. Réutiliser/étendre un composant existant avant d'en créer un nouveau.
+- Icônes : lucide-react-native. Calendrier : react-native-calendars.
+- Formulaires : react-hook-form + zod. Données serveur : TanStack Query.
+- Dates : date-fns (locale `fr`).
+- Types des données : générés depuis le schéma PocketBase (pocketbase-typegen),
+  jamais redéclarés à la main.
+- Le formulaire de réponse des adhérents est une page de l'app Expo
+  (ex. `/r/[token]`), exportée en web et servie par PocketBase.
+
+## Tests et qualité
+- TDD obligatoire : test qui échoue → code minimal → refactor (un commit par étape).
+- Back : Vitest. Logique pure dans des modules isolés (tests unitaires) ;
+  hooks PocketBase couverts par des tests d'intégration contre une instance
+  PocketBase de test lancée à la volée.
+- Front : jest-expo + React Native Testing Library.
+- Une PR n'est soumise en review que si tests, lint et vérification de types passent.
+
+## Workflow multi-agents
+Agents définis dans `.claude/agents/` : `backend-dev`, `frontend-dev`,
+`backend-reviewer`, `frontend-reviewer`.
+
+**Superviseur = la session principale.** Il ne code pas. Il :
+1. découpe le travail en tâches et crée une branche par tâche
+   (`feat/back-<slug>`, `feat/front-<slug>`, `fix/<slug>`) ;
+2. lance l'agent dev concerné dans un worktree isolé ;
+3. à l'annonce « PR prête », lance le reviewer correspondant sur la PR ;
+4. transmet la review à l'agent dev (en reprenant le même agent) et répète
+   jusqu'à `VERDICT: APPROVED` ;
+5. attend la confirmation du dev (« Review validée, PR #N prête à merger »),
+   puis **demande l'accord de l'utilisateur avant chaque merge** ;
+6. merge avec `gh pr merge --merge` (pas de squash : l'historique TDD est conservé)
+   et tient l'utilisateur informé de l'avancement.
+
+Les agents dev ne touchent qu'à leur dossier (`backend/` ou `app/`) ;
+les reviewers ne modifient jamais le code.
+
 ## Git
 - Commits et merges faits avec le compte Git/GitHub de l'utilisateur.
+- Pull requests via `gh`, une PR par tâche, vers `main`.
 - Ne JAMAIS ajouter Claude en co-auteur : pas de ligne `Co-Authored-By`,
   ni de mention « Generated with Claude Code » dans les commits, merges ou PR.
 
