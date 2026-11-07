@@ -11,6 +11,7 @@
   "scripts": {
     "setup": "node scripts/setup-pocketbase.js",
     "dev": "node scripts/dev.js",
+    "typegen": "node scripts/typegen.js",
     "test": "vitest run",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.pocketbase.json",
@@ -24,6 +25,7 @@
     "eslint": "10.14.0",
     "fflate": "0.8.3",
     "globals": "17.14.0",
+    "pocketbase-typegen": "1.5.0",
     "prettier": "3.9.10",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1",
