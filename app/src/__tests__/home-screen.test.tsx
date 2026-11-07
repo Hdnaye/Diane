@@ -3,6 +3,8 @@ import { screen } from 'expo-router/testing-library';
 import { Text } from 'react-native';
 
 import HomeScreen from '@/app/index';
+import type { HuntRepository } from '@/data/hunt-repository';
+import type { Hunt } from '@/data/types';
 import { freezeDate, unfreezeDate } from '@/test-utils/clock';
 import { aHunt, renderScreens } from '@/test-utils/router';
 
@@ -52,6 +54,41 @@ describe('HomeScreen', () => {
     await renderScreens({ index: HomeScreen });
 
     expect(await screen.findByText('Aucune battue prévue.')).toBeOnTheScreen();
+  });
+
+  it('says the hunts are loading, without claiming there is none', async () => {
+    const repository: HuntRepository = {
+      list: () => new Promise<Hunt[]>(() => {}),
+      create: jest.fn(),
+    };
+    await renderScreens({ index: HomeScreen }, { repository });
+
+    expect(await screen.findByText('Chargement des battues…')).toBeOnTheScreen();
+    expect(screen.queryByText('Aucune battue prévue.')).not.toBeOnTheScreen();
+  });
+
+  it('says when the hunts cannot be loaded and lets the organizer retry', async () => {
+    const user = userEvent.setup();
+    const repository: HuntRepository = {
+      list: jest
+        .fn<Promise<Hunt[]>, []>()
+        .mockRejectedValueOnce(new Error('network down'))
+        .mockResolvedValue([aHunt({ date: '2026-11-14' })]),
+      create: jest.fn(),
+    };
+    await renderScreens({ index: HomeScreen }, { repository });
+
+    expect(
+      await screen.findByText('Impossible de charger les battues. Vérifiez la connexion.')
+    ).toBeOnTheScreen();
+    expect(screen.queryByText('Aucune battue prévue.')).not.toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Réessayer' }));
+
+    expect(await screen.findByRole('heading', { name: 'samedi 14 novembre' })).toBeOnTheScreen();
+    expect(
+      screen.queryByText('Impossible de charger les battues. Vérifiez la connexion.')
+    ).not.toBeOnTheScreen();
   });
 
   it('marks the hunt days in the calendar', async () => {
