@@ -6,46 +6,41 @@ import { Platform, View } from 'react-native';
 
 const badgeVariants = cva(
   cn(
-    'group shrink-0 flex-row items-center justify-center gap-1 overflow-hidden rounded-full border border-border px-2 py-0.5',
+    'group shrink-0 flex-row items-center justify-center gap-1.5 self-start overflow-hidden rounded-full px-3 py-1',
     Platform.select({
-      web: 'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-fit whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [&>svg]:pointer-events-none [&>svg]:size-3',
+      web: 'w-fit whitespace-nowrap [&>svg]:pointer-events-none',
     })
   ),
   {
     variants: {
       variant: {
-        default: cn(
-          'border-transparent bg-primary',
-          Platform.select({ web: '[a&]:hover:bg-primary/90' })
-        ),
-        secondary: cn(
-          'border-transparent bg-secondary',
-          Platform.select({ web: '[a&]:hover:bg-secondary/90' })
-        ),
-        destructive: cn(
-          'border-transparent bg-destructive',
-          Platform.select({ web: '[a&]:hover:bg-destructive/90' })
-        ),
-        outline: Platform.select({ web: '[a&]:hover:bg-accent [a&]:hover:text-accent-foreground' }),
+        primary: 'bg-primary',
+        secondary: 'bg-secondary',
+        success: 'bg-accent-light',
+        danger: 'bg-danger',
+        warning: 'bg-warning',
+        neutral: 'bg-surface',
       },
     },
     defaultVariants: {
-      variant: 'default',
+      variant: 'primary',
     },
   }
 );
 
-const badgeTextVariants = cva('text-xs font-medium', {
+const badgeTextVariants = cva('font-sans-bold text-sm', {
   variants: {
     variant: {
-      default: 'text-primary-foreground',
+      primary: 'text-primary-foreground',
       secondary: 'text-secondary-foreground',
-      destructive: 'text-white',
-      outline: 'text-foreground',
+      success: 'text-foreground',
+      danger: 'text-danger-foreground',
+      warning: 'text-warning-foreground',
+      neutral: 'text-surface-foreground',
     },
   },
   defaultVariants: {
-    variant: 'default',
+    variant: 'primary',
   },
 });
 
