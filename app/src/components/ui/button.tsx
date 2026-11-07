@@ -42,7 +42,7 @@ const buttonVariants = cva(
       size: {
         default: cn('h-touch px-6 py-2', Platform.select({ web: 'has-[>svg]:px-5' })),
         sm: cn('h-touch-min gap-1.5 rounded-md px-4', Platform.select({ web: 'has-[>svg]:px-3' })),
-        lg: cn('h-16 rounded-md px-8', Platform.select({ web: 'has-[>svg]:px-6' })),
+        lg: cn('h-touch-lg rounded-md px-8', Platform.select({ web: 'has-[>svg]:px-6' })),
         icon: 'h-touch w-touch',
       },
     },

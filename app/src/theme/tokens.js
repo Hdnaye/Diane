@@ -31,8 +31,12 @@ const fontSize = {
   '4xl': ['2.5rem', '3rem'],
 };
 
-/** Touch targets: "touch" (56px) for primary actions, "touch-min" (48px) as the floor. */
+/**
+ * Touch targets: "touch" (56px) for primary actions, "touch-lg" (64px) for prominent ones,
+ * "touch-min" (48px) as the floor.
+ */
 const spacing = {
+  'touch-lg': '4rem',
   touch: '3.5rem',
   'touch-min': '3rem',
 };
