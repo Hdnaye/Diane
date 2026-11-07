@@ -51,22 +51,38 @@ async function download() {
   chmodSync(POCKETBASE_BIN, 0o755);
 }
 
-if (installedVersion() === POCKETBASE_VERSION) {
-  console.log(`PocketBase ${POCKETBASE_VERSION} already installed.`);
-} else {
-  await download();
-  console.log(
-    `PocketBase ${POCKETBASE_VERSION} installed in ${POCKETBASE_BIN}`,
-  );
+async function main() {
+  if (installedVersion() === POCKETBASE_VERSION) {
+    console.log(`PocketBase ${POCKETBASE_VERSION} already installed.`);
+  } else {
+    await download();
+    console.log(
+      `PocketBase ${POCKETBASE_VERSION} installed in ${POCKETBASE_BIN}`,
+    );
+  }
+
+  // Any PocketBase command (re)generates pb_data/types.d.ts. Its output is
+  // only shown if it fails.
+  runSilently(POCKETBASE_BIN, [
+    "migrate",
+    "up",
+    `--dir=${DATA_DIR}`,
+    `--hooksDir=${HOOKS_DIR}`,
+    `--migrationsDir=${MIGRATIONS_DIR}`,
+  ]);
+  console.log(`Hook typings written to ${path.join(DATA_DIR, "types.d.ts")}`);
 }
 
-// Any PocketBase command (re)generates pb_data/types.d.ts. Its output is
-// only shown if it fails.
-runSilently(POCKETBASE_BIN, [
-  "migrate",
-  "up",
-  `--dir=${DATA_DIR}`,
-  `--hooksDir=${HOOKS_DIR}`,
-  `--migrationsDir=${MIGRATIONS_DIR}`,
-]);
-console.log(`Hook typings written to ${path.join(DATA_DIR, "types.d.ts")}`);
+// Failures are expected (network, checksum, PocketBase errors): print the
+// message only, no Node stack trace.
+try {
+  await main();
+} catch (error) {
+  let message = error instanceof Error ? error.message : String(error);
+  // e.g. fetch() only says "fetch failed": the reason is in `cause`.
+  if (error instanceof Error && error.cause instanceof Error) {
+    message += ` (${error.cause.message})`;
+  }
+  console.error(`Setup failed: ${message}`);
+  process.exitCode = 1;
+}
