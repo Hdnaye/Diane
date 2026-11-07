@@ -1,4 +1,4 @@
-import { Text, TextClassContext } from '@/components/ui/text';
+import { Text } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
 import { View } from 'react-native';
 
@@ -6,16 +6,13 @@ function Card({
   className,
   ...props
 }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
+  // No text color context: text keeps its own variant color (card-foreground = foreground),
+  // so titles stay in the primary color. Flat style: a light border, no shadow.
   return (
-    <TextClassContext.Provider value="text-card-foreground">
-      <View
-        className={cn(
-          'flex flex-col gap-6 rounded-xl border border-border bg-card py-6 shadow-sm shadow-black/5',
-          className
-        )}
-        {...props}
-      />
-    </TextClassContext.Provider>
+    <View
+      className={cn('flex flex-col gap-4 rounded-xl border border-border bg-card py-6', className)}
+      {...props}
+    />
   );
 }
 
@@ -23,7 +20,7 @@ function CardHeader({
   className,
   ...props
 }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
-  return <View className={cn('flex flex-col gap-1.5 px-6', className)} {...props} />;
+  return <View className={cn('flex flex-col gap-1 px-6', className)} {...props} />;
 }
 
 function CardTitle({
@@ -31,15 +28,7 @@ function CardTitle({
   ref,
   ...props
 }: React.ComponentProps<typeof Text> & React.RefAttributes<typeof Text>) {
-  return (
-    <Text
-      ref={ref}
-      role="heading"
-      aria-level={3}
-      className={cn('font-semibold leading-none', className)}
-      {...props}
-    />
-  );
+  return <Text ref={ref} variant="h3" className={className} {...props} />;
 }
 
 function CardDescription({
