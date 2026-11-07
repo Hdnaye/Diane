@@ -13,8 +13,9 @@ describe('HuntCalendar', () => {
   it('shows the current month in French, weeks starting on Monday', async () => {
     await render(<HuntCalendar huntDates={[]} onSelectDate={jest.fn()} />);
 
-    expect(screen.getByText('novembre 2026')).toBeOnTheScreen();
-    // Day names are hidden from screen readers (each day has a full label).
+    // The library hides the header's texts from screen readers (the header is an "adjustable"
+    // element changing the month), and each day has a full label: query hidden elements.
+    expect(screen.getByText('novembre 2026', { includeHiddenElements: true })).toBeOnTheScreen();
     const dayNames = screen.getAllByText(/^(lun|mar|mer|jeu|ven|sam|dim)\.$/, {
       includeHiddenElements: true,
     });
