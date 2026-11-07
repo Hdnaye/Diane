@@ -8,6 +8,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { appHuntRepository } from '@/data/app-hunt-repository';
+import { HuntRepositoryProvider } from '@/data/hunt-repository-context';
 import { queryClient } from '@/lib/query-client';
 import { NAV_THEME } from '@/lib/theme';
 import { fontAssets } from '@/theme/fonts';
@@ -37,13 +39,15 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider value={NAV_THEME}>
-        <StatusBar style="dark" />
-        <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-        </Stack>
-        <PortalHost />
-      </ThemeProvider>
+      <HuntRepositoryProvider repository={appHuntRepository}>
+        <ThemeProvider value={NAV_THEME}>
+          <StatusBar style="dark" />
+          <Stack>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+          </Stack>
+          <PortalHost />
+        </ThemeProvider>
+      </HuntRepositoryProvider>
     </QueryClientProvider>
   );
 }
