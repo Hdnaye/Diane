@@ -66,6 +66,7 @@ describe("npm run setup", () => {
           "#!/bin/sh",
           `[ "$1" = "--version" ] && echo "pocketbase version ${POCKETBASE_VERSION}" && exit 0`,
           `echo "$1 email=$DIANE_ORGANIZER_EMAIL key=$DIANE_ORGANIZER_KEY" >> '${calls}'`,
+          `echo "$*" >> '${calls}.args'`,
         ].join("\n"),
         { mode: 0o755 },
       );
@@ -135,6 +136,25 @@ describe("npm run setup", () => {
       expect(`${result.stdout}${result.stderr}`).not.toContain(
         "fake-key-value",
       );
+    });
+
+    // PocketBase's dev mode prints SQL queries with their values (personal
+    // data, password hashes), and is on by default for binaries under /tmp.
+    it("disables PocketBase's dev mode in every call", async () => {
+      await writeFile(
+        envFile,
+        "DIANE_ORGANIZER_EMAIL=organizer@example.com\nDIANE_ORGANIZER_KEY=fake-key\n",
+      );
+
+      const result = setup();
+
+      expect(result.status).toBe(0);
+      const invocations = (await readFile(`${calls}.args`, "utf8"))
+        .split("\n")
+        .filter((line) => line && line !== "--version");
+      expect(invocations).toHaveLength(2);
+      for (const call of invocations)
+        expect(call.split(" ")).toContain("--dev=false");
     });
   });
 });

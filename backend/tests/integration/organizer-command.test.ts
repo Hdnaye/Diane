@@ -3,15 +3,11 @@
 // `npm run setup` with backend/.env).
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  HOOKS_DIR,
-  MIGRATIONS_DIR,
-  POCKETBASE_BIN,
-} from "../../scripts/paths.js";
+import { POCKETBASE_BIN, pocketbaseArgs } from "../../scripts/paths.js";
 import { startPocketBase } from "./pocketbase-process.js";
 
 describe("pocketbase organizer-upsert", () => {
@@ -26,31 +22,27 @@ describe("pocketbase organizer-upsert", () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  function pocketbase(args: string[], env: Record<string, string>) {
-    return spawnSync(
-      POCKETBASE_BIN,
-      [
-        ...args,
-        `--dir=${dataDir}`,
-        `--hooksDir=${HOOKS_DIR}`,
-        `--migrationsDir=${MIGRATIONS_DIR}`,
-      ],
-      {
-        encoding: "utf8",
-        env: {
-          PATH: process.env.PATH,
-          HOME: process.env.HOME,
-          ...env,
-        },
+  function pocketbase(
+    args: string[],
+    env: Record<string, string>,
+    bin = POCKETBASE_BIN,
+  ) {
+    return spawnSync(bin, pocketbaseArgs(args, { dataDir }), {
+      encoding: "utf8",
+      env: {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        ...env,
       },
-    );
+    });
   }
 
-  function upsert(email: string, key: string) {
-    return pocketbase(["organizer-upsert"], {
-      DIANE_ORGANIZER_EMAIL: email,
-      DIANE_ORGANIZER_KEY: key,
-    });
+  function upsert(email: string, key: string, bin = POCKETBASE_BIN) {
+    return pocketbase(
+      ["organizer-upsert"],
+      { DIANE_ORGANIZER_EMAIL: email, DIANE_ORGANIZER_KEY: key },
+      bin,
+    );
   }
 
   /** Starts PocketBase on dataDir and tries each credential. */
@@ -146,5 +138,31 @@ describe("pocketbase organizer-upsert", () => {
 
     expect(output).not.toContain(email);
     expect(output).not.toContain(secret);
+  });
+
+  // PocketBase 0.40.6 turns its dev mode on by default when its binary lives
+  // under the OS temporary or cache directory (it then believes it runs from
+  // `go run`), and dev mode prints every SQL query with its values.
+  it("never prints the email, the key or SQL from a temporary directory", async () => {
+    const binDir = await mkdtemp(path.join(tmpdir(), "diane-pb-bin-"));
+    try {
+      const bin = path.join(binDir, "pocketbase");
+      await copyFile(POCKETBASE_BIN, bin);
+      await rm(dataDir, { recursive: true, force: true });
+      const secret = key();
+
+      const migrated = pocketbase(["migrate", "up"], {}, bin);
+      const upserted = upsert(email, secret, bin);
+      const output = [migrated, upserted]
+        .map((result) => `${result.stdout}${result.stderr}`)
+        .join("");
+
+      expect(upserted.status).toBe(0);
+      expect(output).not.toContain(email);
+      expect(output).not.toContain(secret);
+      expect(output).not.toMatch(/\b(SELECT|INSERT|UPDATE)\b/);
+    } finally {
+      await rm(binDir, { recursive: true, force: true });
+    }
   });
 });
