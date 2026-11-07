@@ -56,6 +56,17 @@ npm run format:check
 - Police : Atkinson Hyperlegible (`font-sans`, `font-sans-bold` ; pas de `font-bold`, chaque
   graisse est une famille), chargée au démarrage, l'écran de lancement restant affiché d'ici là.
 - Statuts de réponse : `StatusBadge` (icône + libellé, jamais la couleur seule).
+- Données : les écrans passent par TanStack Query (`src/data/hunt-queries.ts`) vers l'interface
+  `HuntRepository` (`list`, `create`), fournie par `HuntRepositoryProvider`. Pour l'instant une
+  implémentation en mémoire (`src/data/app-hunt-repository.ts`, deux battues de démo fictives) ;
+  brancher PocketBase ne change que cette implémentation. Types provisoires : `src/data/types.ts`
+  (à remplacer par ceux de pocketbase-typegen).
+- Calendrier : `HuntCalendar` (react-native-calendars, 100 % JS), locale française construite
+  avec date-fns, semaine commençant le lundi ; jours rendus par un composant à classes NativeWind
+  (aujourd'hui cerclé, battue en `accent-light`, sélection en `primary`).
+- Dates : `src/lib/dates.ts` (date-fns, locale `fr`) ; un jour est une clé locale `yyyy-MM-dd`.
+- Saisie heure / date limite : `StepperField`, gros boutons « − 1 h / + 1 h »… plutôt qu'un
+  sélecteur natif (`@react-native-community/datetimepicker` ne fonctionne pas sur le web).
 - Les couleurs sont définies directement dans la config Tailwind, sans variables CSS, afin
   d'avoir une seule source (aussi lue par le thème de navigation). `components.json` garde
   quand même `cssVariables: true` : avec `false`, la CLI (basée sur shadcn) remplacerait les
