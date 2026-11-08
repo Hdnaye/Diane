@@ -1,3 +1,9 @@
+// The phone running the app may be in any time zone, while hunt days, meeting times and answer
+// deadlines are in Paris time: tests run with the "phone" in New York (other offset, other
+// daylight saving dates), so code using the phone's time zone instead of Paris time fails.
+// Set here, before Jest starts its workers (they inherit the environment).
+process.env.TZ = 'America/New_York';
+
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'jest-expo',

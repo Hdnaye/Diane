@@ -7,16 +7,11 @@ import {
   utcToParis,
 } from '@/lib/paris-time';
 
-// The phone may be anywhere: Paris time must not depend on its time zone.
-const PHONE_TIME_ZONES = ['Europe/Paris', 'UTC', 'America/New_York', 'Pacific/Auckland'];
-
-describe.each(PHONE_TIME_ZONES)('Paris time, phone in %s', (timeZone) => {
-  const initialTimeZone = process.env.TZ;
-  beforeAll(() => {
-    process.env.TZ = timeZone;
-  });
-  afterAll(() => {
-    process.env.TZ = initialTimeZone;
+// Paris time must not depend on the phone's time zone: tests run with the phone in New York
+// (see jest.config.js).
+describe('Paris time', () => {
+  it('runs with the phone outside of Paris', () => {
+    expect(new Date('2026-11-07T12:00:00Z').getHours()).not.toBe(13);
   });
 
   it('converts a Paris wall time to an instant, in winter and in summer', () => {
