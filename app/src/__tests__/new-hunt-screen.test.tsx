@@ -6,8 +6,8 @@ import NewHuntScreen from '@/app/hunts/new';
 import { freezeDate, unfreezeDate } from '@/test-utils/clock';
 import { aHunt, renderScreens } from '@/test-utils/router';
 
-// Saturday 7 November 2026, 10:00.
-const TODAY = new Date(2026, 10, 7, 10, 0);
+// Saturday 7 November 2026, 10:00 in Paris (the tests run with the phone in New York).
+const TODAY = new Date('2026-11-07T09:00:00Z');
 
 const routes = { index: HomeScreen, 'hunts/new': NewHuntScreen };
 
@@ -23,13 +23,13 @@ describe('NewHuntScreen', () => {
   beforeEach(() => freezeDate(TODAY));
   afterEach(unfreezeDate);
 
-  it('starts with the day chosen in the calendar, 8 h 00 and a deadline 48 hours from now', async () => {
+  it('starts with the day chosen in the calendar, 8 h 00 and a deadline two days later at 20 h 00', async () => {
     await openForm('?date=2026-11-20');
 
     expect(await screen.findByText('Jour choisi : vendredi 20 novembre')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'vendredi 20 novembre 2026' })).toBeSelected();
     expect(screen.getByText('8 h 00')).toBeOnTheScreen();
-    expect(screen.getByText('lundi 9 novembre à 10 h 00')).toBeOnTheScreen();
+    expect(screen.getByText('lundi 9 novembre à 20 h 00')).toBeOnTheScreen();
     expect(screen.getByLabelText('Nombre maximum de participants (facultatif)')).toHaveDisplayValue(
       ''
     );
@@ -74,7 +74,7 @@ describe('NewHuntScreen', () => {
         date: '2026-11-20',
         meetingTime: '07:15',
         maxParticipants: 15,
-        responseDeadline: new Date(2026, 10, 9, 10, 0).toISOString(),
+        responseDeadline: '2026-11-09T19:00:00.000Z',
       }),
     ]);
   });
@@ -159,16 +159,17 @@ describe('NewHuntScreen', () => {
     }
   );
 
-  it('rounds the default answer deadline up to the next hour', async () => {
-    freezeDate(new Date(2026, 10, 7, 10, 9));
+  it('gives the default answer deadline in Paris time, even just after midnight', async () => {
+    // Sunday 8 November, 00:30 in Paris (still Saturday evening in New York).
+    freezeDate(new Date('2026-11-07T23:30:00Z'));
     await openForm('?date=2026-11-20');
 
-    expect(await screen.findByText('lundi 9 novembre à 11 h 00')).toBeOnTheScreen();
+    expect(await screen.findByText('mardi 10 novembre à 20 h 00')).toBeOnTheScreen();
   });
 
-  it('moves the default deadline to the eve of the hunt at 20 h 00 when 48 hours is too late', async () => {
+  it('moves the default deadline to the eve of the hunt at 20 h 00 when two days is too late', async () => {
     const user = userEvent.setup();
-    // Hunt tomorrow at 8 h 00: Monday 10 h 00 would be after it.
+    // Hunt tomorrow at 8 h 00: Monday 20 h 00 would be after it.
     const { repository } = await openForm('?date=2026-11-08');
 
     expect(await screen.findByText('samedi 7 novembre à 20 h 00')).toBeOnTheScreen();
@@ -178,7 +179,7 @@ describe('NewHuntScreen', () => {
     expect(await repository.list()).toContainEqual(
       expect.objectContaining({
         date: '2026-11-08',
-        responseDeadline: new Date(2026, 10, 7, 20, 0).toISOString(),
+        responseDeadline: '2026-11-07T19:00:00.000Z',
       })
     );
   });
@@ -186,13 +187,13 @@ describe('NewHuntScreen', () => {
   it('updates the default deadline when another day is chosen', async () => {
     const user = userEvent.setup();
     await openForm('?date=2026-11-20');
-    expect(await screen.findByText('lundi 9 novembre à 10 h 00')).toBeOnTheScreen();
+    expect(await screen.findByText('lundi 9 novembre à 20 h 00')).toBeOnTheScreen();
 
     await user.press(screen.getByRole('button', { name: 'dimanche 8 novembre 2026' }));
     expect(screen.getByText('samedi 7 novembre à 20 h 00')).toBeOnTheScreen();
 
     await user.press(screen.getByRole('button', { name: 'mardi 24 novembre 2026' }));
-    expect(screen.getByText('lundi 9 novembre à 10 h 00')).toBeOnTheScreen();
+    expect(screen.getByText('lundi 9 novembre à 20 h 00')).toBeOnTheScreen();
   });
 
   it('requires the answer deadline to be before the hunt and lets it be changed', async () => {
@@ -225,7 +226,7 @@ describe('NewHuntScreen', () => {
     expect(await repository.list()).toContainEqual(
       expect.objectContaining({
         date: '2026-11-08',
-        responseDeadline: new Date(2026, 10, 8, 7, 0).toISOString(),
+        responseDeadline: '2026-11-08T06:00:00.000Z',
       })
     );
   });

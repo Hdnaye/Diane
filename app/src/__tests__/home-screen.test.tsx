@@ -8,8 +8,8 @@ import type { Hunt } from '@/data/types';
 import { freezeDate, unfreezeDate } from '@/test-utils/clock';
 import { aHunt, renderScreens } from '@/test-utils/router';
 
-// Saturday 7 November 2026, 10:00.
-const TODAY = new Date(2026, 10, 7, 10, 0);
+// Saturday 7 November 2026, 10:00 in Paris (the tests run with the phone in New York).
+const TODAY = new Date('2026-11-07T09:00:00Z');
 
 const HUNTS = [
   aHunt({ date: '2026-10-31' }),
