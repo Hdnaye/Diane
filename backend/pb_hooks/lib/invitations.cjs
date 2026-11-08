@@ -236,6 +236,40 @@ function invitationMessages({ body, hunt, link, several }) {
   };
 }
 
+/**
+ * A channel left `sending` longer than this was abandoned (a sending request
+ * takes seconds: one gateway timeout of 5 s at most, then a few hundred ms
+ * per message): `resend-failed` takes it over.
+ */
+const STALE_SENDING_MS = 10 * 60 * 1000;
+
+/**
+ * Channels of a pending invitation that `resend-failed` sends: failed ones,
+ * ones left `sending` by an interrupted request (older than the last
+ * PocketBase start, or than STALE_SENDING_MS), and ones never sent
+ * (empty status) once the hunt's invitations were sent.
+ *
+ * @param {{ sms_status: string, email_status: string, updated: string }} invitation
+ * @param {{ huntSent: boolean, bootedAt: Date | null, now: Date }} context
+ * @returns {{ sms: boolean, email: boolean }}
+ */
+function channelsToResend(invitation, { huntSent, bootedAt, now }) {
+  const updated = parseUtcDateTime(invitation.updated);
+  const abandoned =
+    updated !== null &&
+    ((bootedAt !== null && updated.getTime() < bootedAt.getTime()) ||
+      now.getTime() - updated.getTime() >= STALE_SENDING_MS);
+  /** @param {string} status */
+  const resend = (status) =>
+    status === "failed" ||
+    (status === "sending" && abandoned) ||
+    (status === "" && huntSent);
+  return {
+    sms: resend(invitation.sms_status),
+    email: resend(invitation.email_status),
+  };
+}
+
 /** @typedef {"sent" | "failed" | "skipped"} SendStatus */
 
 /**
@@ -266,5 +300,7 @@ module.exports = {
   isOpenInvitation,
   publicAnswerView,
   invitationMessages,
+  STALE_SENDING_MS,
+  channelsToResend,
   sendSummary,
 };

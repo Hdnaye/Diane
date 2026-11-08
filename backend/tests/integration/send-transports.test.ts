@@ -330,6 +330,7 @@ describe("invitations through a gateway that does not answer", () => {
     "marks the channels being sent, and goes on after an error on one member",
     { timeout: 30_000 },
     async () => {
+      await f.deactivateEveryone();
       const first = await f.newMember();
       const deleted = await f.newMember();
       const last = await f.newMember();

@@ -6,15 +6,27 @@
 //   template and each member's answer link ({DIANE_PUBLIC_URL}/r/{token}).
 //   Idempotent: sending again only invites the new members.
 // - POST /api/diane/hunts/{id}/resend-failed: sends again, channel by
-//   channel, the SMS / e-mails recorded as failed, for the invitations still
-//   pending of active members. Idempotent: what was sent is not sent again.
-// The invitations to send are created (or claimed: failed -> empty status)
-// in a transaction, so that concurrent requests never send a message twice,
-// then sent; the outcome per channel is stored on each invitation
+//   channel, the SMS / e-mails recorded as failed, left `sending` by an
+//   interrupted request, or never sent, for the invitations still pending of
+//   active members (channelsToResend in lib/invitations.cjs). Idempotent:
+//   what was sent is not sent again.
+// The channels to send are marked `sending` in a transaction (new
+// invitations, or claimed ones), so that concurrent requests never send a
+// message twice and an interrupted sending stays visible; then they are
+// sent, each invitation on its own (an error on one does not stop the
+// others), and the outcome per channel is stored on each invitation
 // (sms_status, email_status) and summed up in the answer. Logs carry ids
 // only.
 // One handler for both routes: a handler cannot use code declared outside
 // of it (each runs in its own JSVM context).
+
+// Start of this PocketBase process: a `sending` older than that was
+// interrupted by a restart.
+onBootstrap((e) => {
+  e.next();
+  e.app.store().set("diane.bootedAt", new Date().toISOString());
+});
+
 for (const route of [
   "/api/diane/hunts/{id}/send-invitations",
   "/api/diane/hunts/{id}/resend-failed",
@@ -102,28 +114,37 @@ for (const route of [
 
         if (resending) {
           if (plan.deadline) txApp.save(current);
-          const failed = txApp.findRecordsByFilter(
+          const bootedAt = String(e.app.store().get("diane.bootedAt") ?? "");
+          const context = {
+            huntSent: current.getString("invitations_sent_at") !== "",
+            bootedAt: bootedAt ? new Date(bootedAt) : null,
+            now,
+          };
+          const pending = txApp.findRecordsByFilter(
             "invitations",
             "hunt = {:hunt} && participation = 'pending'" +
-              " && member.active = true" +
-              " && (sms_status = 'failed' || email_status = 'failed')",
+              " && member.active = true",
             "created",
             0,
             0,
             { hunt: huntId },
           );
-          for (const invitation of failed) {
+          for (const invitation of pending) {
             if (!invitation) continue;
-            const channels = {
-              id: invitation.id,
-              sms: invitation.getString("sms_status") === "failed",
-              email: invitation.getString("email_status") === "failed",
-            };
-            // Claimed: a concurrent request no longer sees them as failed.
-            if (channels.sms) invitation.set("sms_status", "");
-            if (channels.email) invitation.set("email_status", "");
+            const channels = lib.channelsToResend(
+              {
+                sms_status: invitation.getString("sms_status"),
+                email_status: invitation.getString("email_status"),
+                updated: invitation.getString("updated"),
+              },
+              context,
+            );
+            if (!channels.sms && !channels.email) continue;
+            // Claimed: a concurrent request sees them as being sent.
+            if (channels.sms) invitation.set("sms_status", "sending");
+            if (channels.email) invitation.set("email_status", "sending");
             txApp.save(invitation);
-            toSend.push(channels);
+            toSend.push({ id: invitation.id, ...channels });
           }
           return;
         }
@@ -156,6 +177,8 @@ for (const route of [
           const invitation = new Record(collection);
           invitation.set("hunt", huntId);
           invitation.set("member", member.id);
+          invitation.set("sms_status", "sending");
+          invitation.set("email_status", "sending");
           txApp.save(invitation);
           toSend.push({ id: invitation.id, sms: true, email: true });
         }
@@ -196,7 +219,8 @@ for (const route of [
         return hunts[id];
       };
 
-      const results = toSend.map((item) => {
+      /** @param {{ id: string, sms: boolean, email: boolean }} item */
+      const sendOne = (item) => {
         const invitation = e.app.findRecordById("invitations", item.id);
         const member = e.app.findRecordById(
           "members",
@@ -266,6 +290,31 @@ for (const route of [
         if (item.email) invitation.set("email_status", email.status);
         e.app.save(invitation);
         return { sms_status: sms.status, email_status: email.status };
+      };
+
+      // An error on one invitation (e.g. its member deleted meanwhile) does
+      // not stop the others: its claimed channels are recorded as failed
+      // (if it still exists), to be resent.
+      const results = toSend.map((item) => {
+        try {
+          return sendOne(item);
+        } catch {
+          e.app
+            .logger()
+            .warn("Invitation sending error", "invitation", item.id);
+          try {
+            const invitation = e.app.findRecordById("invitations", item.id);
+            if (item.sms) invitation.set("sms_status", "failed");
+            if (item.email) invitation.set("email_status", "failed");
+            e.app.save(invitation);
+          } catch {
+            // Deleted: nothing left to record.
+          }
+          return {
+            sms_status: item.sms ? "failed" : "",
+            email_status: item.email ? "failed" : "",
+          };
+        }
       });
 
       return e.json(200, lib.sendSummary(results));
