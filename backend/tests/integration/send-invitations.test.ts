@@ -19,6 +19,8 @@ import {
 const require = createRequire(import.meta.url);
 const { DEFAULT_TEMPLATE_BODY } =
   require("../../pb_hooks/lib/message-template.cjs") as typeof import("../../pb_hooks/lib/message-template.cjs");
+const { defaultDeadline } =
+  require("../../pb_hooks/lib/invitations.cjs") as typeof import("../../pb_hooks/lib/invitations.cjs");
 
 const nextPhone = phoneNumbers(40);
 const nextDay = huntDays(2110);
@@ -294,9 +296,9 @@ describe("send invitations", () => {
     expect(await pb.outbox()).toHaveLength(before);
   });
 
-  it("sets the default deadline (48 h) when the hunt has none", async () => {
+  it("sets the default deadline (day + 2, 20:00 Paris) when the hunt has none", async () => {
     const hunt = await newHunt({ response_deadline: "" });
-    const start = Date.now();
+    const start = new Date();
 
     const response = await send(hunt.id);
 
@@ -304,12 +306,10 @@ describe("send invitations", () => {
     const updated = await pb.api(recordsPath("hunts", hunt.id), {
       token: pb.organizerToken,
     });
-    const deadline = Date.parse(
-      updated.body.response_deadline.replace(" ", "T"),
+    // Sending may cross midnight (Paris) during the request.
+    expect([defaultDeadline(start), defaultDeadline(new Date())]).toContain(
+      updated.body.response_deadline,
     );
-    const hours48 = 48 * 3600 * 1000;
-    expect(deadline).toBeGreaterThanOrEqual(start + hours48 - 5000);
-    expect(deadline).toBeLessThanOrEqual(Date.now() + hours48 + 5000);
   });
 
   it("adds the day line only for members with several open invitations", async () => {

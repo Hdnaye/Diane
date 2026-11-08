@@ -85,10 +85,11 @@ routerAdd("POST", "/api/test/waiting-list", (e) => {
 
 routerAdd("POST", "/api/test/invitations", (e) => {
   const lib = require(\`\${__hooks}/lib/invitations.cjs\`);
-  const { hunts, now, urls } = e.requestInfo().body;
+  const { hunts, now, urls, instants } = e.requestInfo().body;
   const at = new Date(now);
   return e.json(200, {
     links: urls.map((url) => lib.answerLink(url, "abc")),
+    deadlines: instants.map((instant) => lib.defaultDeadline(new Date(instant))),
     hunts: hunts.map((hunt) => ({
       plan: lib.sendPlan(hunt, at),
       refusal: lib.answerRefusal(hunt, at),
@@ -237,6 +238,19 @@ const INVITATION_HUNTS = [
     response_deadline: "",
     status: "draft",
   },
+  // Around the default deadline (2026-11-10 20:00 Paris).
+  {
+    date: "2026-11-10",
+    meeting_time: "20:00",
+    response_deadline: "",
+    status: "draft",
+  },
+  {
+    date: "2026-11-10",
+    meeting_time: "20:01",
+    response_deadline: "",
+    status: "draft",
+  },
   {
     date: "2026-11-14",
     meeting_time: "08:00",
@@ -255,6 +269,15 @@ const INVITATION_HUNTS = [
     response_deadline: "2026-11-12 17:00:00.000Z",
     status: "closed",
   },
+];
+/** Sending times around midnight, daylight saving switches and year ends. */
+const DEADLINE_INSTANTS = [
+  "2026-11-08T22:59:00.000Z",
+  "2026-11-08T23:30:00.000Z",
+  "2026-03-27T12:00:00.000Z",
+  "2026-10-23T22:30:00.000Z",
+  "2026-12-30T15:00:00.000Z",
+  "2028-02-27T12:00:00.000Z",
 ];
 const PUBLIC_URLS = [
   "https://diane.example.org/",
@@ -511,9 +534,13 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
         hunts: INVITATION_HUNTS,
         now: INVITATION_NOW,
         urls: PUBLIC_URLS,
+        instants: DEADLINE_INSTANTS,
       }),
     ).toStrictEqual({
       links: PUBLIC_URLS.map((url) => invitations.answerLink(url, "abc")),
+      deadlines: DEADLINE_INSTANTS.map((instant) =>
+        invitations.defaultDeadline(new Date(instant)),
+      ),
       hunts: INVITATION_HUNTS.map((hunt) => ({
         plan: invitations.sendPlan(hunt, at),
         refusal: invitations.answerRefusal(hunt, at),

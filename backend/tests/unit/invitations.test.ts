@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const require = createRequire(import.meta.url);
 const {
   answerLink,
+  defaultDeadline,
   sendPlan,
   answerRefusal,
   isOpenInvitation,
@@ -50,6 +51,26 @@ describe("answerLink", () => {
   );
 });
 
+describe("defaultDeadline", () => {
+  it.each([
+    // Sunday 11:00 Paris (CET) -> Tuesday 20:00 Paris.
+    ["2026-11-08T10:00:00.000Z", "2026-11-10 19:00:00.000Z"],
+    // Just after midnight in Paris (still the previous day in UTC): day + 2
+    // counts from the Paris day.
+    ["2026-11-08T23:30:00.000Z", "2026-11-11 19:00:00.000Z"],
+    // Just before midnight in Paris.
+    ["2026-11-08T22:59:00.000Z", "2026-11-10 19:00:00.000Z"],
+    // Summer time (CEST, UTC+2).
+    ["2026-07-14T08:00:00.000Z", "2026-07-16 18:00:00.000Z"],
+    // Friday in winter time, deadline on Sunday after the switch to summer time.
+    ["2026-03-27T12:00:00.000Z", "2026-03-29 18:00:00.000Z"],
+    // Across a month and a year.
+    ["2026-12-30T15:00:00.000Z", "2027-01-01 19:00:00.000Z"],
+  ])("from %s is %s", (now, expected) => {
+    expect(defaultDeadline(new Date(now))).toBe(expected);
+  });
+});
+
 describe("sendPlan", () => {
   it("accepts a hunt whose deadline is ahead, deadline unchanged", () => {
     expect(sendPlan(hunt(), NOW)).toStrictEqual({ ok: true, deadline: null });
@@ -75,18 +96,42 @@ describe("sendPlan", () => {
     ).toMatchObject({ ok: false, code: "deadline_passed" });
   });
 
-  it("sets the default deadline (48 h) when there is none", () => {
+  it("sets the default deadline (day + 2, 20:00 Paris) when there is none", () => {
+    // Sunday 2026-11-08 11:00 Paris -> Tuesday 2026-11-10 20:00 Paris (CET).
     expect(sendPlan(hunt({ response_deadline: "" }), NOW)).toStrictEqual({
       ok: true,
-      deadline: "2026-11-10 10:00:00.000Z",
+      deadline: "2026-11-10 19:00:00.000Z",
     });
   });
 
-  it("refuses without deadline when the hunt starts within 48 h", () => {
-    // 2026-11-10 08:00 Paris = 07:00 UTC, before now + 48 h.
+  it.each([
+    // The hunt starts before the default deadline, or at the same time.
+    ["2026-11-10", "08:00"],
+    ["2026-11-10", "20:00"],
+  ])(
+    "refuses without deadline when the hunt (%s %s) starts before day + 2, 20:00",
+    (date, meeting_time) => {
+      expect(
+        sendPlan(hunt({ date, meeting_time, response_deadline: "" }), NOW),
+      ).toMatchObject({
+        ok: false,
+        code: "deadline_missing",
+        message: expect.stringMatching(/date limite/),
+      });
+    },
+  );
+
+  it("accepts without deadline a hunt starting after day + 2, 20:00", () => {
     expect(
-      sendPlan(hunt({ date: "2026-11-10", response_deadline: "" }), NOW),
-    ).toMatchObject({ ok: false, code: "deadline_missing" });
+      sendPlan(
+        hunt({
+          date: "2026-11-10",
+          meeting_time: "20:01",
+          response_deadline: "",
+        }),
+        NOW,
+      ),
+    ).toStrictEqual({ ok: true, deadline: "2026-11-10 19:00:00.000Z" });
   });
 
   it("gives a French message with each refusal", () => {
