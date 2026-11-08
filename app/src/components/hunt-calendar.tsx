@@ -5,7 +5,8 @@ import { Calendar, type CalendarProps, type DateData } from 'react-native-calend
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { FIRST_DAY_OF_WEEK } from '@/lib/calendar-locale';
-import { formatLongDay, toDateKey } from '@/lib/dates';
+import { formatLongDay } from '@/lib/dates';
+import { parisDay } from '@/lib/paris-time';
 import { cn } from '@/lib/utils';
 import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
 import { remToPx } from '@/theme/units';
@@ -81,7 +82,7 @@ function DayCell({ date, state, marking, onPress }: DayCellProps) {
   if (!date) {
     return <View className="h-touch-min w-touch-min" />;
   }
-  const isToday = date.dateString === toDateKey(new Date());
+  const isToday = date.dateString === parisDay(new Date());
   const isHunt = Boolean(marking?.marked);
   const isSelected = Boolean(marking?.selected) && !isHunt;
   const isDisabled = isHunt || state === 'disabled';

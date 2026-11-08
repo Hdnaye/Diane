@@ -1,5 +1,4 @@
 import {
-  formatDateTime,
   formatLongDay,
   formatTime,
   fromDateKey,
@@ -17,10 +16,6 @@ describe('date helpers', () => {
     expect(formatTime('08:00')).toBe('8 h 00');
     expect(formatTime('07:30')).toBe('7 h 30');
     expect(formatTime('13:05')).toBe('13 h 05');
-  });
-
-  it('writes a date and time in full', () => {
-    expect(formatDateTime(new Date(2026, 10, 9, 20, 37))).toBe('lundi 9 novembre à 20 h 37');
   });
 
   it('converts between local dates and day keys', () => {

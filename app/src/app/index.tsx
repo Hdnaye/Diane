@@ -8,7 +8,7 @@ import { HuntCard } from '@/components/hunt-card';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useHunts } from '@/data/hunt-queries';
-import { toDateKey } from '@/lib/dates';
+import { parisDay } from '@/lib/paris-time';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -16,7 +16,7 @@ export default function HomeScreen() {
   const hunts = huntsQuery.data ?? [];
   const [selectedDate, setSelectedDate] = useState<string>();
 
-  const today = toDateKey(new Date());
+  const today = parisDay(new Date());
   const upcoming = hunts.filter((hunt) => hunt.date >= today);
 
   function createHunt() {

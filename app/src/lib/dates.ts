@@ -24,11 +24,6 @@ export function formatTime(time: string): string {
   return format(parse(time, TIME, new Date(2000, 0, 1)), "H 'h' mm", { locale: fr });
 }
 
-/** "lundi 9 novembre à 20 h 37" */
-export function formatDateTime(date: Date): string {
-  return format(date, "EEEE d MMMM 'à' H 'h' mm", { locale: fr });
-}
-
 /** Shifts an `HH:mm` time by a number of minutes, wrapping around midnight. */
 export function shiftTime(time: string, minutes: number): string {
   return format(addMinutes(parse(time, TIME, new Date(2000, 0, 1)), minutes), TIME);

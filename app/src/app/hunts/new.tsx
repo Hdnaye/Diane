@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { addDays, addHours } from 'date-fns';
+import { addHours } from 'date-fns';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm, type Resolver } from 'react-hook-form';
@@ -13,7 +13,7 @@ import { Text } from '@/components/ui/text';
 import { HuntDayTakenError } from '@/data/hunt-repository';
 import { useCreateHunt, useHunts } from '@/data/hunt-queries';
 import type { NewHunt } from '@/data/types';
-import { formatDateTime, formatLongDay, formatTime, shiftTime, toDateKey } from '@/lib/dates';
+import { formatLongDay, formatTime, shiftTime } from '@/lib/dates';
 import {
   createHuntFormSchema,
   defaultHuntFormValues,
@@ -21,6 +21,7 @@ import {
   messages,
   type HuntFormValues,
 } from '@/lib/hunt-form';
+import { formatParisDateTime, parisDay, shiftParisDays } from '@/lib/paris-time';
 
 const MAX_PARTICIPANTS_LABEL = 'Nombre maximum de participants (facultatif)';
 
@@ -90,7 +91,7 @@ export default function NewHuntScreen() {
               <HuntCalendar
                 huntDates={takenDates}
                 selectedDate={value || undefined}
-                minDate={toDateKey(now)}
+                minDate={parisDay(now)}
                 onSelectDate={(date) => {
                   onChange(date);
                   followDefaultDeadline({ date });
@@ -178,18 +179,18 @@ export default function NewHuntScreen() {
             <View className="gap-3">
               <StepperField
                 label="Date limite de réponse"
-                value={formatDateTime(value)}
+                value={formatParisDateTime(value)}
                 steps={[
                   [
                     {
                       text: '− 1 jour',
                       label: 'date limite un jour plus tôt',
-                      onPress: () => onChange(addDays(value, -1)),
+                      onPress: () => onChange(shiftParisDays(value, -1)),
                     },
                     {
                       text: '+ 1 jour',
                       label: 'date limite un jour plus tard',
-                      onPress: () => onChange(addDays(value, 1)),
+                      onPress: () => onChange(shiftParisDays(value, 1)),
                     },
                   ],
                   [
