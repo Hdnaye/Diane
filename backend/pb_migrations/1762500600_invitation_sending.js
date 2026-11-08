@@ -59,9 +59,8 @@ migrate(
     const settings = app.settings();
     settings.rateLimits.enabled = true;
     settings.rateLimits.rules = [
-      ...settings.rateLimits.rules.filter(
-        (rule) => rule.label !== ANSWER_ROUTES_LABEL,
-      ),
+      // First: PocketBase applies the first matching path prefix rule in
+      // list order, and the default "/api/" rule would match before it.
       // A member opens the page and answers: a few requests. Tokens are
       // unguessable anyway; this only slows down abuse.
       /** @type {core.RateLimitRule} */ ({
@@ -70,6 +69,9 @@ migrate(
         duration: 10,
         maxRequests: 20,
       }),
+      ...settings.rateLimits.rules.filter(
+        (rule) => rule.label !== ANSWER_ROUTES_LABEL,
+      ),
     ];
     app.save(settings);
   },
