@@ -195,7 +195,7 @@ describe("incoming SMS webhook", () => {
       const sms = await newSms(member.phone);
       expect(sms).toHaveLength(1);
       expect(sms[0]?.text).toMatch(
-        /^Présence OUI enregistrée pour la battue du \w+ \d+ \w+\. Modifiable jusqu'au /,
+        /^Présence OUI enregistrée pour la battue du \w+ \d+(er)? \w+\. Modifiable jusqu'au /,
       );
     });
 
@@ -292,7 +292,7 @@ describe("incoming SMS webhook", () => {
         "pending",
       );
       expect((await newSms(member.phone))[0]?.text).toMatch(
-        /^La battue du \w+ \d+ \w+ est annulée\.$/,
+        /^La battue du \w+ \d+(er)? \w+ est annulée\.$/,
       );
     });
 
