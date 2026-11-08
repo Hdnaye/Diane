@@ -77,8 +77,9 @@ function toRecord(member: MemberInput): Create<'members'> {
 }
 
 /**
- * What a revoked token, treated as a guest by PocketBase, gets: a write refused without any field
- * error (400), forbidden (403), or a record not found (404, update and delete rules).
+ * What a revoked token gets when PocketBase treats it as a guest (back-ends before the explicit
+ * 401 of `organizer-access.pb.js`): a write refused without any field error (400), forbidden
+ * (403), or a record not found (404, update and delete rules). The session then checks the token.
  */
 function isRefusedAsGuest(outcome: Outcome<unknown>): boolean {
   if (!('error' in outcome) || !(outcome.error instanceof ClientResponseError)) {

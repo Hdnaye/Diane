@@ -109,8 +109,9 @@ npm run format:check
   nom (accents et casse ignorés), ajout, modification, suppression après confirmation (le back
   supprime aussi les réponses : droit à l'effacement) ou « Ne plus inviter » (adhérent inactif).
   Interface `MemberRepository` (`list`, `create`, `update`, `remove`, `setActive`), PocketBase
-  (`src/data/pocketbase-member-repository.ts`, même session et même détection du jeton révoqué
-  que les battues ; une modification ou suppression en invité répond 404) ou en mémoire.
+  (`src/data/pocketbase-member-repository.ts`, même session que les battues : un 401 déclenche une
+  nouvelle authentification ; un refus sans erreur de champ, un 403 ou un 404 font revalider le
+  jeton, comme avec un back antérieur au 401 explicite) ou en mémoire.
   Téléphone saisi librement (« 06 39 98 00 01 », « +33 6… »), envoyé en E.164 et affiché au
   format national (`src/lib/phone.ts`, même règle que le back). Le formulaire
   (`src/lib/member-form.ts`) vérifie tout en une fois ; les refus du back (numéro invalide,
