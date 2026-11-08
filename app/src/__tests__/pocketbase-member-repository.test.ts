@@ -261,11 +261,12 @@ describe('PocketBase member repository', () => {
         guest ? notFound : request.method === 'DELETE' ? { status: 204 } : echo('m3')(request)
       );
       const M3 = `${MEMBERS_PATH}/m3`;
+      await repository.setActive('m3', true);
 
       revoke();
       requests.length = 0;
       await repository.update('m3', paul);
-      expect(paths(requests)).toEqual([AUTH_PATH, M3, REFRESH_PATH, AUTH_PATH, M3]);
+      expect(paths(requests)).toEqual([M3, REFRESH_PATH, AUTH_PATH, M3]);
 
       revoke();
       requests.length = 0;
