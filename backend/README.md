@@ -88,11 +88,26 @@ Routes (`pb_hooks/send-invitations.pb.js`, `pb_hooks/web-answers.pb.js`):
   link `{DIANE_PUBLIC_URL}/r/{token}`: SMS if the member has a phone, e-mail
   if an e-mail. The hunt becomes `invitations_sent` (`invitations_sent_at`:
   first sending). Idempotent: sending again only invites new members (failed
-  sends are not retried). Without deadline, the deadline is set to now + 48 h.
+  sends: see `resend-failed`). Without deadline, the deadline is set to the
+  sending day (Paris) + 2 days at 20:00 Paris, e.g. sent on Sunday morning
+  or Sunday 23:00 -> Tuesday 20:00 (`defaultDeadline` in
+  `pb_hooks/lib/invitations.cjs`).
   Answers `{ invited, sms: { sent, failed, skipped }, email: {...} }`;
   refusals are 409 with `data.hunt.code` = `hunt_cancelled`, `hunt_closed`,
-  `deadline_passed` or `deadline_missing` (hunt within 48 h, no deadline),
-  503 when `DIANE_PUBLIC_URL` is missing.
+  `deadline_passed` or `deadline_missing` (no deadline, and the hunt starts
+  before the default one), 503 when `DIANE_PUBLIC_URL` is missing.
+- `POST /api/diane/hunts/{id}/resend-failed` (organizer): sends again, per
+  channel, the SMS / e-mails recorded as `failed` (e.g. gateway phone
+  switched off), for invitations still `pending` of active members; a
+  channel already `sent` or `skipped` is left alone, and nobody new is
+  invited. Statuses are updated; same answer as `send-invitations`, where
+  `invited` counts the invitations resent and only the resent channels are
+  counted. Same refusals. Idempotent: failed channels are claimed in a
+  transaction, so a second (or concurrent) call resends nothing already
+  sent; whatever fails again can be resent later. A dedicated route rather
+  than a parameter of `send-invitations`: a separate action in the app
+  ("Renvoyer les échecs"), which never invites anybody, while
+  `send-invitations` keeps its contract.
 - `GET /api/diane/r/{token}` (public): the hunt (date, time, French labels,
   cancelled), the deadline, the member's own `participation` / `answer` and
   `can_answer` (+ `refusal`). Nothing personal; unknown token: generic 404.
@@ -106,15 +121,20 @@ Routes (`pb_hooks/send-invitations.pb.js`, `pb_hooks/web-answers.pb.js`):
 Waiting list (`pb_hooks/lib/waiting-list.cjs`): a yes is `present` while
 places are free (`max_participants` 0: no limit), else `waiting_list`,
 ordered by `answered_at`. Answers are applied in a transaction (serialized:
-never more than the maximum). A withdrawal frees a place but promotes nobody,
-and a newcomer does not take a freed place while members wait: the rule is to
-be defined with the organizer. A repeated yes keeps its place and time.
+never more than the maximum). Rule validated with the organizer: when a
+place is freed, a new yes goes behind the members already on the waiting
+list; the organizer moves someone up from the list (no automatic
+promotion). A repeated yes keeps its place and time.
 
 SMS are rendered in GSM-7 (`pb_hooks/lib/sms-encoding.cjs`): characters
 outside of it are transliterated (`août` → `aout`, `ê` → `e`, `’` → `'`...),
 since a single one would switch the whole SMS to UCS-2 (70 characters per
 segment instead of 160). E-mails keep the accents. The default template fits
-2 SMS segments for every date (tested, with a 25-character public URL).
+2 SMS segments for every date, tested with a 25-character and a
+50-character public URL: keep `DIANE_PUBLIC_URL` at **50 characters at
+most** (scheme included, e.g. `https://diane.example.org`: 25; a
+Tailscale Funnel name `https://<machine>.<tailnet>.ts.net` is usually
+35-45). Beyond, the SMS may take 3 segments.
 
 ### Sending: SMS gateway and e-mail
 
@@ -129,7 +149,11 @@ PocketBase):
   Same API for the phone's local server (`http://<phone-ip>:8080`, the
   backend must reach the phone) and the cloud relay
   (`https://api.sms-gate.app/3rdparty/v1`). A 2xx (202) means queued on the
-  phone, not delivered.
+  phone, not delivered. Timeout: 5 s. Once the gateway is unreachable
+  (connection refused, timeout, DNS), the remaining SMS of the same request
+  are recorded as failed without trying (a phone switched off costs one
+  timeout, not one per SMS); an HTTP error answer (4xx/5xx) only fails its
+  own message. Resend the failures with `resend-failed`.
 - E-mail: PocketBase's mailer with the SMTP settings of the admin UI
   (Settings > Mail settings), sender `DIANE_EMAIL_SENDER_ADDRESS` /
   `DIANE_EMAIL_SENDER_NAME` (default: the admin UI's sender). SMTP disabled:
@@ -140,17 +164,56 @@ PocketBase):
   data; never a phone number, an e-mail or a message.
 - Tests: `DIANE_SMS_TRANSPORT=fake` / `DIANE_EMAIL_TRANSPORT=fake` write
   each message as a JSON file into `DIANE_FAKE_OUTBOX_DIR`. Never in
-  production.
+  production: PocketBase prints a `WARNING: DIANE_..._TRANSPORT=fake` line
+  at startup (and in its logs) while one is on.
 
 ### Rate limits
 
-A migration enables PocketBase's rate limiter (PocketBase defaults, e.g.
-`*:auth` 2 per 3 s, `*:create` 20 per 5 s, `/api/` 300 per 10 s) and puts
-first a rule for the public answer routes: `/api/diane/r/`, guests, 20
-requests per 10 s per IP. Tokens (about 256 bits) cannot be enumerated
-anyway; this only slows down abuse. Limits are per client IP: behind a
-reverse proxy, set its IP header in Settings > Application > Trusted proxy,
-or every member shares the proxy's IP. Adjust them in Settings > Rate limits.
+Migrations enable PocketBase's rate limiter, per client IP, with these rules
+(first matching rule wins, in this order):
+
+| Rule                            | Audience                  | Limit        |
+| ------------------------------- | ------------------------- | ------------ |
+| `/api/diane/r/` (answer routes) | guests                    | 20 per 10 s  |
+| `*:auth` (logging in)           | guests                    | 2 per 3 s    |
+| `*:create`                      | guests                    | 20 per 5 s   |
+| `/api/batch`                    | guests                    | 3 per 1 s    |
+| `/api/`                         | guests                    | 300 per 10 s |
+| `/api/`                         | authenticated (organizer) | 600 per 10 s |
+
+PocketBase's default rules apply to guests only: the organizer can create
+many records in a row (an import, a demo data set). Logging in is always a
+guest request, so `*:auth` still applies to the app's silent login: the app
+should retry after a short delay on a 429. Tokens (about 256 bits) cannot be
+enumerated anyway; the answer rule only slows down abuse. Adjust in
+Settings > Rate limits.
+
+#### Deployment behind a reverse proxy (Tailscale Funnel...)
+
+Behind a reverse proxy on the same machine (Tailscale Funnel, Caddy,
+nginx), PocketBase sees every request coming from `127.0.0.1`: all members
+then share a single quota (20 requests per 10 s on `/api/diane/r/`), right
+after an invitation burst when many open their link. When deploying:
+
+1. check which header the chosen proxy sets with the client IP (usually
+   `X-Forwarded-For`; Tailscale Funnel: check it on a test request);
+2. in Settings > Application > Trusted proxy, add that header; with
+   `X-Forwarded-For`, leave "use leftmost IP" off (the rightmost IP is the
+   one added by the proxy, the leftmost can be forged by the client);
+3. only do it when PocketBase is reachable through the proxy only (listening
+   on `127.0.0.1`): otherwise anyone can forge the header and bypass the
+   limits.
+
+### Request logs
+
+PocketBase logs every request in `_logs` (admin UI > Logs). A migration
+turns off client IPs (`logIP`: an IP is personal data) and keeps logs
+**2 days** (default 5): enough to look into a problem reported the next day
+or after a weekend hunt, without keeping a history of who opened their link
+when. `pb_hooks/request-logs.pb.js` replaces answer tokens with `:token` in
+the logged URL (`/r/{token}`, `/api/diane/r/{token}`, whatever the outcome,
+429 included) and in the Referer. Hook logs carry ids only (invitation,
+channel, reason). Limit: the user agent is still logged.
 
 ### App types
 
@@ -198,7 +261,8 @@ bin/pocketbase superuser upsert EMAIL PASSWORD --dir=pb_data
 - `tests/unit/`, `tests/integration/` — Vitest. Integration tests run against
   a throwaway PocketBase instance (free port, temporary data dir, test
   superuser, 127.0.0.1 exempted from rate limits) started by
-  `tests/integration/pocketbase.global-setup.ts`; tests needing their own
+  `tests/integration/pocketbase.global-setup.ts`; `rate-limit.test.ts` and
+  `request-logs.test.ts` check the limits on instances without exemption; tests needing their own
   environment (transports, exact counts, process output) start one with
   `tests/integration/instance.ts`. Test instances run with
   `--automigrate=false`: changing a collection in a test never writes a
