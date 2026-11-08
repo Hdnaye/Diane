@@ -8,9 +8,11 @@
 // mechanics as the invitations: channels claimed `sending` in a
 // transaction (reminder_sms_status / reminder_email_status), then sent and
 // recorded; until the deadline, each run sends again the reminders failed
-// or left `sending` by an interrupted run (gateway phone off, restart), at
-// most 3 attempts per channel, and never one that timed out (`unknown`: the
-// slow phone may have sent it) (noticeChannelsToSend, noticeRecord).
+// or not sent (gateway unreachable during the run) or left `sending` by an
+// interrupted run (gateway phone off, restart), at most 3 attempts per
+// channel (noticeChannelsToSend, noticeRecord). A resent SMS keeps its
+// gateway id (`rem-<invitation id>`): one the slow phone took after the
+// timeout is rejected as a duplicate (409), counted as sent.
 // Logs carry ids only.
 
 cronAdd("dianeReminders", "*/10 * * * *", () => {
@@ -132,6 +134,7 @@ cronAdd("dianeReminders", "*/10 * * * *", () => {
               lib.answerLink(publicUrl, invitation.getString("token")) ?? "",
             ),
           label: "Reminder",
+          idPrefix: "rem",
         },
       ),
     );

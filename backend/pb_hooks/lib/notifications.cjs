@@ -144,9 +144,8 @@ function reminderDue(hunt, now) {
 
 /**
  * Channels of a notice to send (or send again): like channelsToResend
- * (failed, interrupted `sending`, never sent when `huntSent`), but a failed
- * channel only while attempted less than MAX_NOTICE_ATTEMPTS times, and
- * never an `unknown` one (timed out: it may have been sent).
+ * (failed, not sent, interrupted `sending`, never sent when `huntSent`),
+ * but only while attempted less than MAX_NOTICE_ATTEMPTS times.
  *
  * @param {NoticeState} notice
  * @param {{ huntSent: boolean, bootedAt: Date | null, now: Date }} context
@@ -162,21 +161,18 @@ function noticeChannelsToSend(notice, context) {
 
 /**
  * Status and attempt count to record after sending a notice channel: a
- * timeout becomes `unknown` (may have been sent, never retried
- * automatically); a message not attempted (gateway already unreachable,
- * not configured) or skipped does not count as an attempt.
+ * message not attempted (`not_sent`: gateway already unreachable during
+ * the run) or skipped does not count as an attempt.
  *
  * @param {{ status: string, kind: string }} outcome Result of deliver().
  * @param {number} attempts Attempts before this one.
  * @returns {{ status: string, attempts: number }}
  */
 function noticeRecord(outcome, attempts) {
-  if (outcome.status === "skipped") return { status: "skipped", attempts };
-  if (outcome.kind === "not_attempted") return { status: "failed", attempts };
-  return {
-    status: outcome.kind === "timeout" ? "unknown" : outcome.status,
-    attempts: attempts + 1,
-  };
+  if (outcome.status === "skipped" || outcome.kind === "not_attempted") {
+    return { status: outcome.status, attempts };
+  }
+  return { status: outcome.status, attempts: attempts + 1 };
 }
 
 /**

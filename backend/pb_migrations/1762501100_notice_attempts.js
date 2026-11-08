@@ -2,26 +2,36 @@
 
 // Capped automatic retries of reminders and cancellation notices
 // (noticeChannelsToSend in pb_hooks/lib/notifications.cjs):
-// - `unknown` status for reminder_* / cancellation_* channels: the gateway
-//   did not answer in time, the SMS may have been sent; never retried
-//   automatically;
-// - `*_attempts` counters per channel (at most 3 attempts);
+// - `not_sent` status for every channel (invitation, reminder,
+//   cancellation): not attempted, the gateway was found unreachable earlier
+//   in the same sending; sent again like `failed`;
+// - `*_attempts` counters per notice channel (at most 3 attempts);
 // - `ambiguous` reason in the "to check" queue: a reply without day while
 //   another upcoming hunt still waits for the member's answer.
 
 const NOTICE_KINDS = ["reminder", "cancellation"];
 const NOTICE_CHANNELS = ["sms", "email"];
 const NOTICE_STATUS_VALUES = ["sending", "sent", "failed", "skipped"];
+const ALL_STATUS_FIELDS = [
+  "sms_status",
+  "email_status",
+  "reminder_sms_status",
+  "reminder_email_status",
+  "cancellation_sms_status",
+  "cancellation_email_status",
+];
 
 migrate(
   (app) => {
     const invitations = app.findCollectionByNameOrId("invitations");
+    for (const name of ALL_STATUS_FIELDS) {
+      const field = /** @type {core.SelectField} */ (
+        invitations.fields.getByName(name)
+      );
+      field.values = [...NOTICE_STATUS_VALUES, "not_sent"];
+    }
     for (const notice of NOTICE_KINDS) {
       for (const channel of NOTICE_CHANNELS) {
-        const field = /** @type {core.SelectField} */ (
-          invitations.fields.getByName(`${notice}_${channel}_status`)
-        );
-        field.values = [...NOTICE_STATUS_VALUES, "unknown"];
         invitations.fields.add(
           new NumberField({
             name: `${notice}_${channel}_attempts`,
@@ -42,26 +52,27 @@ migrate(
   },
   (app) => {
     const invitations = app.findCollectionByNameOrId("invitations");
+    for (const name of ALL_STATUS_FIELDS) {
+      // Not sent: failed, so that it can still be resent.
+      const records = app.findRecordsByFilter(
+        "invitations",
+        `${name} = 'not_sent'`,
+        "",
+        0,
+        0,
+      );
+      for (const record of records) {
+        if (!record) continue;
+        record.set(name, "failed");
+        app.save(record);
+      }
+      const field = /** @type {core.SelectField} */ (
+        invitations.fields.getByName(name)
+      );
+      field.values = NOTICE_STATUS_VALUES;
+    }
     for (const notice of NOTICE_KINDS) {
       for (const channel of NOTICE_CHANNELS) {
-        const name = `${notice}_${channel}_status`;
-        // May have been sent: recorded as sent, never sent again.
-        const records = app.findRecordsByFilter(
-          "invitations",
-          `${name} = 'unknown'`,
-          "",
-          0,
-          0,
-        );
-        for (const record of records) {
-          if (!record) continue;
-          record.set(name, "sent");
-          app.save(record);
-        }
-        const field = /** @type {core.SelectField} */ (
-          invitations.fields.getByName(name)
-        );
-        field.values = NOTICE_STATUS_VALUES;
         invitations.fields.removeByName(`${notice}_${channel}_attempts`);
       }
     }

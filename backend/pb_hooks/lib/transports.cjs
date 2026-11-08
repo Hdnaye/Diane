@@ -118,6 +118,9 @@ function base64(text) {
  * @typedef {object} SmsMessage
  * @property {string} to   E.164 phone number, "" when none.
  * @property {string} text
+ * @property {string} [id] Message id given to the gateway, deterministic
+ *   per logical message (e.g. "rem-<invitation id>"): the gateway rejects
+ *   an id it already took (409), so a resent message is never sent twice.
  */
 
 /**
@@ -141,10 +144,15 @@ function gatewayRequest(config, message) {
       "Content-Type": "application/json",
       Authorization: `Basic ${base64(`${config.username}:${config.password}`)}`,
     },
-    body: JSON.stringify({
-      textMessage: { text: message.text },
-      phoneNumbers: [message.to],
-    }),
+    body: JSON.stringify(
+      message.id
+        ? {
+            id: message.id,
+            textMessage: { text: message.text },
+            phoneNumbers: [message.to],
+          }
+        : { textMessage: { text: message.text }, phoneNumbers: [message.to] },
+    ),
     timeout: GATEWAY_TIMEOUT_S,
   };
 }
@@ -166,13 +174,13 @@ function gatewayRequest(config, message) {
  */
 
 /**
- * @typedef {"failed" | "timeout" | "not_attempted"} FailureKind
- * - failed: attempted and refused (connection refused, HTTP error, SMTP
- *   error): not sent;
- * - timeout: no answer in time once connected: the message may have been
- *   sent (a slow phone accepts it after the timeout);
- * - not_attempted: nothing sent (not configured, or gateway already found
- *   unreachable during this sending).
+ * @typedef {"failed" | "not_attempted"} FailureKind
+ * - failed: attempted and failed (connection refused, timeout, HTTP error,
+ *   SMTP error), or not configured. After a timeout the phone may have
+ *   taken the SMS: resending it is safe thanks to its id (duplicate
+ *   rejected by the gateway, see SmsMessage);
+ * - not_attempted: not tried, the gateway was already found unreachable
+ *   during this sending (status `not_sent`).
  */
 
 /**
@@ -194,10 +202,7 @@ function createTransports(config, io) {
     /** @param {SmsMessage | EmailMessage} message */
     send(message) {
       if (!config.outboxDir) {
-        throw failure(
-          "Fake transport without outbox directory.",
-          "not_attempted",
-        );
+        throw failure("Fake transport without outbox directory.", "failed");
       }
       io.record(kind, message);
     },
@@ -214,7 +219,7 @@ function createTransports(config, io) {
     send(message) {
       const { url, username, password } = config.sms;
       if (!url || !username || !password) {
-        throw failure("SMS gateway not configured.", "not_attempted");
+        throw failure("SMS gateway not configured.", "failed");
       }
       if (unreachable) {
         throw failure(
@@ -225,23 +230,15 @@ function createTransports(config, io) {
       let response;
       try {
         response = io.httpSend(gatewayRequest(config.sms, message));
-      } catch (cause) {
+      } catch {
         unreachable = true;
-        // The cause may quote the request: only classified, not repeated.
-        // No connection at all ("dial tcp ...", even an i/o timeout): not
-        // sent. A timeout once connected: the phone may have taken it.
-        const text = String(cause instanceof Error ? cause.message : cause);
-        if (
-          !/dial tcp/i.test(text) &&
-          /deadline exceeded|timeout|timed out/i.test(text)
-        ) {
-          throw failure(
-            "SMS gateway did not answer in time (the SMS may have been sent).",
-            "timeout",
-          );
-        }
+        // The cause may quote the request: not repeated. A timeout may
+        // hide an SMS taken by a slow phone: resending it is safe (its id).
         throw failure("SMS gateway unreachable.", "failed");
       }
+      // Duplicate id: the gateway already took this message (an earlier
+      // attempt answered too late): sent.
+      if (response.statusCode === 409 && message.id) return;
       if (response.statusCode < 200 || response.statusCode > 299) {
         throw failure(
           `SMS gateway answered HTTP ${response.statusCode}.`,
@@ -254,13 +251,9 @@ function createTransports(config, io) {
   /** @type {Transport<EmailMessage>} */
   const smtp = {
     send(message) {
-      if (!io.smtpEnabled) {
-        throw failure("SMTP not configured.", "not_attempted");
-      }
+      if (!io.smtpEnabled) throw failure("SMTP not configured.", "failed");
       const address = config.email.senderAddress || io.defaultSender.address;
-      if (!address) {
-        throw failure("No e-mail sender address.", "not_attempted");
-      }
+      if (!address) throw failure("No e-mail sender address.", "failed");
       const name = config.email.senderAddress
         ? config.email.senderName
         : io.defaultSender.name;
@@ -290,9 +283,9 @@ function createTransports(config, io) {
  * @template {{ to: string }} M
  * @param {Transport<M>} transport
  * @param {M} message
- * @returns {{ status: "sent" | "failed" | "skipped", error: string, kind: FailureKind | "" }}
- *   error: reason of a failure, without personal data; kind: its kind
- *   ("" unless failed).
+ * @returns {{ status: "sent" | "failed" | "skipped" | "not_sent", error: string, kind: FailureKind | "" }}
+ *   status `not_sent`: not attempted (gateway already unreachable); error:
+ *   reason of a failure, without personal data; kind: "" unless failed.
  */
 function deliver(transport, message) {
   if (!message.to) return { status: "skipped", error: "", kind: "" };
@@ -300,11 +293,12 @@ function deliver(transport, message) {
     transport.send(message);
     return { status: "sent", error: "", kind: "" };
   } catch (error) {
-    const kind = /** @type {{ kind?: unknown }} */ (error).kind;
+    const notAttempted =
+      /** @type {{ kind?: unknown }} */ (error).kind === "not_attempted";
     return {
-      status: "failed",
+      status: notAttempted ? "not_sent" : "failed",
       error: error instanceof Error ? error.message : "Sending failed.",
-      kind: kind === "timeout" || kind === "not_attempted" ? kind : "failed",
+      kind: notAttempted ? "not_attempted" : "failed",
     };
   }
 }

@@ -142,6 +142,7 @@ export const InvitationsSmsStatusOptions = {
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',
+  not_sent: 'not_sent',
 } as const;
 export type InvitationsSmsStatusOptions =
   (typeof InvitationsSmsStatusOptions)[keyof typeof InvitationsSmsStatusOptions];
@@ -151,6 +152,7 @@ export const InvitationsEmailStatusOptions = {
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',
+  not_sent: 'not_sent',
 } as const;
 export type InvitationsEmailStatusOptions =
   (typeof InvitationsEmailStatusOptions)[keyof typeof InvitationsEmailStatusOptions];
@@ -160,7 +162,7 @@ export const InvitationsReminderSmsStatusOptions = {
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',
-  unknown: 'unknown',
+  not_sent: 'not_sent',
 } as const;
 export type InvitationsReminderSmsStatusOptions =
   (typeof InvitationsReminderSmsStatusOptions)[keyof typeof InvitationsReminderSmsStatusOptions];
@@ -170,7 +172,7 @@ export const InvitationsReminderEmailStatusOptions = {
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',
-  unknown: 'unknown',
+  not_sent: 'not_sent',
 } as const;
 export type InvitationsReminderEmailStatusOptions =
   (typeof InvitationsReminderEmailStatusOptions)[keyof typeof InvitationsReminderEmailStatusOptions];
@@ -180,7 +182,7 @@ export const InvitationsCancellationSmsStatusOptions = {
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',
-  unknown: 'unknown',
+  not_sent: 'not_sent',
 } as const;
 export type InvitationsCancellationSmsStatusOptions =
   (typeof InvitationsCancellationSmsStatusOptions)[keyof typeof InvitationsCancellationSmsStatusOptions];
@@ -190,7 +192,7 @@ export const InvitationsCancellationEmailStatusOptions = {
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',
-  unknown: 'unknown',
+  not_sent: 'not_sent',
 } as const;
 export type InvitationsCancellationEmailStatusOptions =
   (typeof InvitationsCancellationEmailStatusOptions)[keyof typeof InvitationsCancellationEmailStatusOptions];

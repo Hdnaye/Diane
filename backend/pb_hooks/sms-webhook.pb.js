@@ -254,6 +254,8 @@ routerAdd("POST", "/api/diane/sms/webhook", (e) => {
     const outcome = deliver(appTransports(e.app).sms, {
       to: sent.phone,
       text: sent.text,
+      // One confirmation per handled webhook, never sent twice.
+      id: `cnf-${sent.inboundId}`,
     });
     if (outcome.status === "failed") {
       logger.warn(

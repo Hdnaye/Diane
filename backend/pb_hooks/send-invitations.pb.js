@@ -245,6 +245,7 @@ for (const route of [
           fields: { sms: "sms_status", email: "email_status" },
           compose,
           label: "Invitation",
+          idPrefix: "inv",
         }),
       );
 

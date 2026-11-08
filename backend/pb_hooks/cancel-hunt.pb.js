@@ -8,10 +8,10 @@
 // annulée."). Idempotent: the notices are claimed per channel
 // (cancellation_sms_status / cancellation_email_status: sending, then
 // sent / failed / skipped) in a transaction, like invitations; calling it
-// again only resends the notices failed or left `sending` by an
-// interrupted request, at most 3 attempts per channel, never one that
-// timed out (`unknown`: it may have been sent; noticeChannelsToSend).
-// Answers { notified, sms: {...}, email: {...} } (`unknown` not counted).
+// again only resends the notices failed, not sent or left `sending` by an
+// interrupted request, at most 3 attempts per channel
+// (noticeChannelsToSend), with the same gateway id (`can-<invitation id>`:
+// a duplicate is rejected). Answers { notified, sms: {...}, email: {...} }.
 
 routerAdd(
   "POST",
@@ -113,6 +113,7 @@ routerAdd(
         },
         compose: () => messages,
         label: "Cancellation notice",
+        idPrefix: "can",
       }),
     );
     const { invited, sms, email } = lib.sendSummary(results);

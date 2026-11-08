@@ -68,9 +68,12 @@ function appTransports(app) {
  *   `sms_status` / `email_status`.
  * @property {(invitation: core.Record, member: core.Record) => Messages} compose
  * @property {string} label Kind of message in logs, e.g. "Invitation".
+ * @property {string} idPrefix The SMS gets the gateway message id
+ *   `<idPrefix>-<invitation id>` (e.g. "rem"): the same on every attempt,
+ *   so that the gateway rejects a duplicate (409, counted as sent).
  * @property {{ sms: string, email: string }} [attempts] Attempt counters of
  *   a notice (reminder, cancellation): the outcome is then recorded with
- *   noticeRecord (timeout → `unknown`, attempts counted).
+ *   noticeRecord (attempts counted, `not_sent` not counted).
  */
 
 /**
@@ -93,7 +96,7 @@ function sendClaimed(
   app,
   transports,
   item,
-  { fields, compose, label, attempts },
+  { fields, compose, label, attempts, idPrefix },
 ) {
   /** @type {{ sms_status: string, email_status: string }} */
   const result = { sms_status: "", email_status: "" };
@@ -141,6 +144,7 @@ function sendClaimed(
           ? deliver(transports.sms, {
               to: member.getString("phone"),
               text: messages.sms,
+              id: `${idPrefix}-${item.id}`,
             })
           : deliver(transports.email, {
               to: member.getString("email"),

@@ -320,6 +320,7 @@ function channelsToResend(invitation, { huntSent, bootedAt, now }) {
   /** @param {string} status */
   const resend = (status) =>
     status === "failed" ||
+    status === "not_sent" ||
     (status === "sending" && abandoned) ||
     (status === "" && huntSent);
   return {
@@ -341,6 +342,7 @@ function sendSummary(results) {
     sent: results.filter((item) => item[field] === "sent").length,
     failed: results.filter((item) => item[field] === "failed").length,
     skipped: results.filter((item) => item[field] === "skipped").length,
+    not_sent: results.filter((item) => item[field] === "not_sent").length,
   });
   return {
     invited: results.length,
