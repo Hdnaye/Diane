@@ -17,6 +17,7 @@ import { formatDateTime, formatLongDay, formatTime, shiftTime, toDateKey } from 
 import {
   createHuntFormSchema,
   defaultHuntFormValues,
+  defaultResponseDeadline,
   messages,
   type HuntFormValues,
 } from '@/lib/hunt-form';
@@ -39,11 +40,23 @@ export default function NewHuntScreen() {
     control,
     handleSubmit,
     setError,
+    getValues,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<HuntFormValues, unknown, NewHunt>({
     defaultValues: defaultHuntFormValues(now, params.date),
     resolver,
   });
+
+  // Until the organizer changes the deadline by hand, it follows the chosen day and time.
+  const [deadlineEdited, setDeadlineEdited] = useState(false);
+  function followDefaultDeadline(change: Partial<Pick<HuntFormValues, 'date' | 'meetingTime'>>) {
+    if (deadlineEdited) {
+      return;
+    }
+    const { date, meetingTime } = { ...getValues(), ...change };
+    setValue('responseDeadline', defaultResponseDeadline(now, date, meetingTime));
+  }
 
   const onSubmit = handleSubmit(async (hunt) => {
     try {
@@ -78,7 +91,10 @@ export default function NewHuntScreen() {
                 huntDates={takenDates}
                 selectedDate={value || undefined}
                 minDate={toDateKey(now)}
-                onSelectDate={onChange}
+                onSelectDate={(date) => {
+                  onChange(date);
+                  followDefaultDeadline({ date });
+                }}
               />
             </View>
             <Text>{value ? `Jour choisi : ${formatLongDay(value)}` : 'Aucun jour choisi'}</Text>
@@ -90,38 +106,44 @@ export default function NewHuntScreen() {
       <Controller
         control={control}
         name="meetingTime"
-        render={({ field: { value, onChange } }) => (
-          <StepperField
-            label="Heure de rendez-vous"
-            value={formatTime(value)}
-            steps={[
-              [
-                {
-                  text: '− 1 h',
-                  label: 'Rendez-vous : une heure plus tôt',
-                  onPress: () => onChange(shiftTime(value, -60)),
-                },
-                {
-                  text: '+ 1 h',
-                  label: 'Rendez-vous : une heure plus tard',
-                  onPress: () => onChange(shiftTime(value, 60)),
-                },
-              ],
-              [
-                {
-                  text: '− 15 min',
-                  label: 'Rendez-vous : 15 minutes plus tôt',
-                  onPress: () => onChange(shiftTime(value, -15)),
-                },
-                {
-                  text: '+ 15 min',
-                  label: 'Rendez-vous : 15 minutes plus tard',
-                  onPress: () => onChange(shiftTime(value, 15)),
-                },
-              ],
-            ]}
-          />
-        )}
+        render={({ field: { value, onChange: setTime } }) => {
+          const onChange = (meetingTime: string) => {
+            setTime(meetingTime);
+            followDefaultDeadline({ meetingTime });
+          };
+          return (
+            <StepperField
+              label="Heure de rendez-vous"
+              value={formatTime(value)}
+              steps={[
+                [
+                  {
+                    text: '− 1 h',
+                    label: 'Rendez-vous : une heure plus tôt',
+                    onPress: () => onChange(shiftTime(value, -60)),
+                  },
+                  {
+                    text: '+ 1 h',
+                    label: 'Rendez-vous : une heure plus tard',
+                    onPress: () => onChange(shiftTime(value, 60)),
+                  },
+                ],
+                [
+                  {
+                    text: '− 15 min',
+                    label: 'Rendez-vous : 15 minutes plus tôt',
+                    onPress: () => onChange(shiftTime(value, -15)),
+                  },
+                  {
+                    text: '+ 15 min',
+                    label: 'Rendez-vous : 15 minutes plus tard',
+                    onPress: () => onChange(shiftTime(value, 15)),
+                  },
+                ],
+              ]}
+            />
+          );
+        }}
       />
 
       <Controller
@@ -147,41 +169,47 @@ export default function NewHuntScreen() {
       <Controller
         control={control}
         name="responseDeadline"
-        render={({ field: { value, onChange } }) => (
-          <View className="gap-3">
-            <StepperField
-              label="Date limite de réponse"
-              value={formatDateTime(value)}
-              steps={[
-                [
-                  {
-                    text: '− 1 jour',
-                    label: 'Date limite : un jour plus tôt',
-                    onPress: () => onChange(addDays(value, -1)),
-                  },
-                  {
-                    text: '+ 1 jour',
-                    label: 'Date limite : un jour plus tard',
-                    onPress: () => onChange(addDays(value, 1)),
-                  },
-                ],
-                [
-                  {
-                    text: '− 1 h',
-                    label: 'Date limite : une heure plus tôt',
-                    onPress: () => onChange(addHours(value, -1)),
-                  },
-                  {
-                    text: '+ 1 h',
-                    label: 'Date limite : une heure plus tard',
-                    onPress: () => onChange(addHours(value, 1)),
-                  },
-                ],
-              ]}
-            />
-            <FieldError message={errors.responseDeadline?.message} />
-          </View>
-        )}
+        render={({ field: { value, onChange: setDeadline } }) => {
+          const onChange = (deadline: Date) => {
+            setDeadlineEdited(true);
+            setDeadline(deadline);
+          };
+          return (
+            <View className="gap-3">
+              <StepperField
+                label="Date limite de réponse"
+                value={formatDateTime(value)}
+                steps={[
+                  [
+                    {
+                      text: '− 1 jour',
+                      label: 'Date limite : un jour plus tôt',
+                      onPress: () => onChange(addDays(value, -1)),
+                    },
+                    {
+                      text: '+ 1 jour',
+                      label: 'Date limite : un jour plus tard',
+                      onPress: () => onChange(addDays(value, 1)),
+                    },
+                  ],
+                  [
+                    {
+                      text: '− 1 h',
+                      label: 'Date limite : une heure plus tôt',
+                      onPress: () => onChange(addHours(value, -1)),
+                    },
+                    {
+                      text: '+ 1 h',
+                      label: 'Date limite : une heure plus tard',
+                      onPress: () => onChange(addHours(value, 1)),
+                    },
+                  ],
+                ]}
+              />
+              <FieldError message={errors.responseDeadline?.message} />
+            </View>
+          );
+        }}
       />
 
       <FieldError message={errors.root?.message} />
