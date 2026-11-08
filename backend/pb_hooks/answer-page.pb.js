@@ -10,6 +10,12 @@ routerAdd("GET", "/r/{token}", (e) => {
   return e.fileFS($os.dirFS(`${__hooks}/../pb_public/answer`), "index.html");
 });
 
+// Same page with a trailing slash, added by some SMS and e-mail apps
+// (`{$}`: /r/{token}/ only, not /r/{token}/anything).
+routerAdd("GET", "/r/{token}/{$}", (e) => {
+  return e.fileFS($os.dirFS(`${__hooks}/../pb_public/answer`), "index.html");
+});
+
 // Security headers of the page, its files and the answer routes. The page
 // loads nothing from another site (Content-Security-Policy), sends no
 // Referer (the URL carries the token), cannot be framed, and answers are
