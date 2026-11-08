@@ -2,7 +2,7 @@ import type { Hunt, NewHunt } from '@/data/types';
 
 /**
  * Access to the hunts. Screens only use this interface (through TanStack Query, see
- * `hunt-queries.ts`): plugging PocketBase in only means writing another implementation.
+ * `hunt-queries.ts`): PocketBase in the app (`pocketbase-hunt-repository.ts`), in memory in tests.
  */
 export interface HuntRepository {
   /** All hunts, sorted by day. */
@@ -18,7 +18,7 @@ export class HuntDayTakenError extends Error {
   }
 }
 
-/** In-memory implementation, used until the PocketBase collections exist. */
+/** In-memory implementation, used by the tests. */
 export function createInMemoryHuntRepository(initial: Hunt[] = []): HuntRepository {
   const hunts = [...initial];
   let nextId = 1;
