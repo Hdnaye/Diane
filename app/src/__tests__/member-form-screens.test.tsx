@@ -138,10 +138,10 @@ describe('EditMemberScreen', () => {
 
   async function openMember(name: string, members: Member[] = [JEAN, EMILE]) {
     const user = userEvent.setup();
-    const result = await renderMemberScreens(routes, { members });
+    const { repository } = await renderMemberScreens(routes, { members });
     await user.press(await screen.findByRole('button', { name: new RegExp(name) }));
     await screen.findByLabelText(NAME);
-    return { user, ...result };
+    return { user, repository };
   }
 
   it('shows the member as stored, the phone number written the usual way', async () => {
