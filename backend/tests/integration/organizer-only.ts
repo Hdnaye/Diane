@@ -57,32 +57,56 @@ export function describeOrganizerOnlyAccess(
       return list.body.totalItems;
     }
 
-    it("lists nothing to anonymous requests", async () => {
-      const response = await api(recordsPath(collection));
+    // An explicit 401 rather than an empty list: the app must not believe
+    // there is no data when its session is missing or expired.
+    it.each([
+      ["anonymous", undefined],
+      ["invalid token", "not-a-valid-token"],
+    ])("refuses %s list requests with a 401", async (_label, token) => {
+      const response = await api(recordsPath(collection), { token });
 
-      expect(response.status).toBe(200);
-      expect(response.body.items).toEqual([]);
-      expect(response.body.totalItems).toBe(0);
+      expect(response.status).toBe(401);
+      expect(response.body.items).toBeUndefined();
     });
 
-    it("refuses anonymous view, update and delete", async () => {
-      const viewed = await api(recordsPath(collection, existingId));
-      const updated = await api(recordsPath(collection, existingId), {
-        method: "PATCH",
-        body: await validPatch(),
-      });
-      const deleted = await api(recordsPath(collection, existingId), {
-        method: "DELETE",
-      });
-
-      expect(viewed.status).toBe(404);
-      expect(updated.status).toBe(404);
-      expect(deleted.status).toBe(404);
-      const check = await api(recordsPath(collection, existingId), {
+    it("refuses requests naming the collection by id with a 401", async () => {
+      const info = await api(`/api/collections/${collection}`, {
         token: await superuserToken(),
       });
-      expect(check.status).toBe(200);
+
+      const response = await api(recordsPath(info.body.id));
+
+      expect(response.status).toBe(401);
     });
+
+    it.each([
+      ["anonymous", undefined],
+      ["invalid token", "not-a-valid-token"],
+    ])(
+      "refuses %s view, update and delete with a 401",
+      async (_label, token) => {
+        const viewed = await api(recordsPath(collection, existingId), {
+          token,
+        });
+        const updated = await api(recordsPath(collection, existingId), {
+          method: "PATCH",
+          token,
+          body: await validPatch(),
+        });
+        const deleted = await api(recordsPath(collection, existingId), {
+          method: "DELETE",
+          token,
+        });
+
+        expect(viewed.status).toBe(401);
+        expect(updated.status).toBe(401);
+        expect(deleted.status).toBe(401);
+        const check = await api(recordsPath(collection, existingId), {
+          token: await superuserToken(),
+        });
+        expect(check.status).toBe(200);
+      },
+    );
 
     it("refuses anonymous creation", async () => {
       const body = await validBody();
@@ -92,8 +116,7 @@ export function describeOrganizerOnlyAccess(
         body,
       });
 
-      expect(response.status).toBeGreaterThanOrEqual(400);
-      expect(response.status).toBeLessThan(500);
+      expect(response.status).toBe(401);
       expect(await matching(body)).toBe(0);
       // The check itself finds records.
       expect(await matching(existingBody)).toBe(1);

@@ -53,7 +53,7 @@ describe("organizers collection", () => {
       },
     });
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(401);
   });
 
   it("does not let an organizer create, update or delete accounts", async () => {
@@ -101,13 +101,22 @@ describe("organizers collection", () => {
     expect(view.status).toBe(404);
   });
 
-  it("hides organizer accounts from anonymous requests", async () => {
-    const list = await api(recordsPath("organizers"));
-    const view = await api(recordsPath("organizers", organizer.id));
+  it.each([
+    ["anonymous", undefined],
+    ["invalid token", "not-a-valid-token"],
+  ])(
+    "refuses organizer accounts to %s requests with a 401",
+    async (_label, token) => {
+      const list = await api(recordsPath("organizers"), { token });
+      const view = await api(recordsPath("organizers", organizer.id), {
+        token,
+      });
 
-    expect(list.body.items ?? []).toEqual([]);
-    expect(view.status).toBe(404);
-  });
+      expect(list.status).toBe(401);
+      expect(list.body.items).toBeUndefined();
+      expect(view.status).toBe(401);
+    },
+  );
 
   it("requires a secret key of at least 32 characters", async () => {
     const password = "short-key-1234567890";
