@@ -123,6 +123,16 @@ describe("gatewayRequest", () => {
   });
 });
 
+/** Message of the error thrown by `action`, "" if none. */
+function thrown(action: () => void): string {
+  try {
+    action();
+    return "";
+  } catch (error) {
+    return String(error);
+  }
+}
+
 /** Fake PocketBase primitives recording their calls. */
 function fakeIo(
   overrides: Partial<Parameters<typeof createTransports>[1]> = {},
@@ -204,12 +214,9 @@ describe("createTransports: SMS gateway", () => {
     });
     const { sms } = createTransports(gatewayConfig(), io);
 
-    expect(() => sms.send({ to: PHONE, text: "x" })).toThrow(/unreachable/);
-    try {
-      sms.send({ to: PHONE, text: "x" });
-    } catch (error) {
-      expect(String(error)).not.toContain(PHONE);
-    }
+    const error = thrown(() => sms.send({ to: PHONE, text: "x" }));
+    expect(error).toMatch(/unreachable/);
+    expect(error).not.toContain(PHONE);
   });
 });
 
@@ -283,14 +290,11 @@ describe("createTransports: SMTP", () => {
     });
     const { email } = createTransports(gatewayConfig(), io);
 
-    expect(() => email.send({ to: EMAIL, subject: "s", text: "t" })).toThrow(
-      /SMTP sending failed/,
+    const error = thrown(() =>
+      email.send({ to: EMAIL, subject: "s", text: "t" }),
     );
-    try {
-      email.send({ to: EMAIL, subject: "s", text: "t" });
-    } catch (error) {
-      expect(String(error)).not.toContain(EMAIL);
-    }
+    expect(error).toMatch(/SMTP sending failed/);
+    expect(error).not.toContain(EMAIL);
   });
 });
 

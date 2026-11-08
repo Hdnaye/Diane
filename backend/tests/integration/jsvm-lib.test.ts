@@ -21,6 +21,12 @@ const { isValidDay, parisToUtc, utcToParis, parseUtcDateTime } =
   require("../../pb_hooks/lib/paris-time.cjs") as typeof import("../../pb_hooks/lib/paris-time.cjs");
 const { smsSegments, toGsm7 } =
   require("../../pb_hooks/lib/sms-encoding.cjs") as typeof import("../../pb_hooks/lib/sms-encoding.cjs");
+const waitingList =
+  require("../../pb_hooks/lib/waiting-list.cjs") as typeof import("../../pb_hooks/lib/waiting-list.cjs");
+const invitations =
+  require("../../pb_hooks/lib/invitations.cjs") as typeof import("../../pb_hooks/lib/invitations.cjs");
+const transports =
+  require("../../pb_hooks/lib/transports.cjs") as typeof import("../../pb_hooks/lib/transports.cjs");
 const { messageVariables, renderTemplate, renderSms, DEFAULT_TEMPLATE_BODY } =
   require("../../pb_hooks/lib/message-template.cjs") as typeof import("../../pb_hooks/lib/message-template.cjs");
 
@@ -68,6 +74,48 @@ routerAdd("POST", "/api/test/message-template", (e) => {
   );
 });
 
+routerAdd("POST", "/api/test/waiting-list", (e) => {
+  const lib = require(\`\${__hooks}/lib/waiting-list.cjs\`);
+  const { answers, lists } = e.requestInfo().body;
+  return e.json(200, {
+    answers: answers.map((context) => lib.participationAfterAnswer(context)),
+    lists: lists.map(([items, max]) => lib.attendance(items, max)),
+  });
+});
+
+routerAdd("POST", "/api/test/invitations", (e) => {
+  const lib = require(\`\${__hooks}/lib/invitations.cjs\`);
+  const { hunts, now, urls } = e.requestInfo().body;
+  const at = new Date(now);
+  return e.json(200, {
+    links: urls.map((url) => lib.answerLink(url, "abc")),
+    hunts: hunts.map((hunt) => ({
+      plan: lib.sendPlan(hunt, at),
+      refusal: lib.answerRefusal(hunt, at),
+      view: lib.publicAnswerView(hunt, { participation: "waiting_list" }, at),
+      messages: lib.invitationMessages({
+        body: "Battue le {date}.{#plusieurs} OUI {jour}{/plusieurs} {lien}",
+        hunt,
+        link: "https://diane.example.org/r/abc",
+        several: true,
+      }),
+    })),
+  });
+});
+
+routerAdd("POST", "/api/test/transports", (e) => {
+  const lib = require(\`\${__hooks}/lib/transports.cjs\`);
+  const { texts, env } = e.requestInfo().body;
+  const config = lib.transportConfig((name) => env[name] || "");
+  return e.json(200, {
+    config,
+    base64: texts.map((text) => lib.base64(text)),
+    requests: texts.map((text) =>
+      lib.gatewayRequest(config.sms, { to: "+33639981000", text }),
+    ),
+  });
+});
+
 routerAdd("POST", "/api/test/sms-encoding", (e) => {
   const lib = require(\`\${__hooks}/lib/sms-encoding.cjs\`);
   const inputs = e.requestInfo().body.inputs;
@@ -89,6 +137,145 @@ const SMS_TEXTS = [
   "oui 👍🏽 ❤️",
   "8\u00a0h\u202f00\tici",
 ];
+
+/** Answers around the limits of a hunt. */
+const ANSWER_CONTEXTS = [
+  {
+    current: "pending",
+    answer: "yes",
+    maxParticipants: 2,
+    presentCount: 1,
+    waitingCount: 0,
+  },
+  {
+    current: "pending",
+    answer: "yes",
+    maxParticipants: 2,
+    presentCount: 2,
+    waitingCount: 0,
+  },
+  {
+    current: "absent",
+    answer: "yes",
+    maxParticipants: 2,
+    presentCount: 1,
+    waitingCount: 1,
+  },
+  {
+    current: "pending",
+    answer: "yes",
+    maxParticipants: 0,
+    presentCount: 9,
+    waitingCount: 0,
+  },
+  {
+    current: "waiting_list",
+    answer: "yes",
+    maxParticipants: 2,
+    presentCount: 0,
+    waitingCount: 0,
+  },
+  {
+    current: "present",
+    answer: "no",
+    maxParticipants: 2,
+    presentCount: 1,
+    waitingCount: 0,
+  },
+] as const;
+const ATTENDANCE_LISTS: [
+  { id: string; participation: string; answered_at: string }[],
+  number,
+][] = [
+  [
+    [
+      {
+        id: "b",
+        participation: "waiting_list",
+        answered_at: "2026-11-01 12:00:00.000Z",
+      },
+      {
+        id: "a",
+        participation: "waiting_list",
+        answered_at: "2026-11-01 12:00:00.000Z",
+      },
+      {
+        id: "c",
+        participation: "waiting_list",
+        answered_at: "2026-11-01 11:00:00.000Z",
+      },
+      {
+        id: "d",
+        participation: "present",
+        answered_at: "2026-11-01 10:00:00.000Z",
+      },
+      { id: "e", participation: "pending", answered_at: "" },
+    ],
+    1,
+  ],
+  [[{ id: "a", participation: "present", answered_at: "" }], 0],
+];
+
+/** Hunts around sending and answering limits, at INVITATION_NOW. */
+const INVITATION_NOW = "2026-11-08T10:00:00.000Z";
+const INVITATION_HUNTS = [
+  {
+    date: "2026-11-14",
+    meeting_time: "08:00",
+    response_deadline: "2026-11-12 17:00:00.000Z",
+    status: "draft",
+  },
+  {
+    date: "2027-08-14",
+    meeting_time: "07:30",
+    response_deadline: "",
+    status: "invitations_sent",
+  },
+  {
+    date: "2026-11-10",
+    meeting_time: "08:00",
+    response_deadline: "",
+    status: "draft",
+  },
+  {
+    date: "2026-11-14",
+    meeting_time: "08:00",
+    response_deadline: "2026-11-08 10:00:00.000Z",
+    status: "draft",
+  },
+  {
+    date: "2026-11-14",
+    meeting_time: "08:00",
+    response_deadline: "2026-11-12 17:00:00.000Z",
+    status: "cancelled",
+  },
+  {
+    date: "2026-11-14",
+    meeting_time: "08:00",
+    response_deadline: "2026-11-12 17:00:00.000Z",
+    status: "closed",
+  },
+];
+const PUBLIC_URLS = [
+  "https://diane.example.org/",
+  "https://example.org/diane//",
+  "diane.example.org",
+  "",
+];
+const TRANSPORT_TEXTS = [
+  "",
+  "f",
+  "fo",
+  "sms:secret",
+  "é€👍",
+  "Battue le 15 aout\n",
+];
+const TRANSPORT_ENV = {
+  DIANE_SMS_GATEWAY_URL: " https://api.sms-gate.app/3rdparty/v1/ ",
+  DIANE_SMS_GATEWAY_USERNAME: "sms",
+  DIANE_SMS_GATEWAY_PASSWORD: "pässwörd",
+  DIANE_EMAIL_TRANSPORT: "fake",
+};
 
 /** Phone numbers exercising separators and rejections. */
 const PHONES = [
@@ -297,6 +484,70 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
       ),
       instants: INSTANTS.map((instant) => utcToParis(new Date(instant))),
       datetimes: DATETIMES.map((value) => iso(parseUtcDateTime(value))),
+    });
+  });
+
+  it("applies the waiting list exactly like Node", async () => {
+    expect(
+      await inJsvm(pocketbase.url, "waiting-list", {
+        answers: ANSWER_CONTEXTS,
+        lists: ATTENDANCE_LISTS,
+      }),
+    ).toStrictEqual({
+      answers: ANSWER_CONTEXTS.map((context) =>
+        waitingList.participationAfterAnswer(context),
+      ),
+      lists: ATTENDANCE_LISTS.map(([items, max]) =>
+        waitingList.attendance(items, max),
+      ),
+    });
+  });
+
+  it("applies invitation rules exactly like Node", async () => {
+    const at = new Date(INVITATION_NOW);
+
+    expect(
+      await inJsvm(pocketbase.url, "invitations", {
+        hunts: INVITATION_HUNTS,
+        now: INVITATION_NOW,
+        urls: PUBLIC_URLS,
+      }),
+    ).toStrictEqual({
+      links: PUBLIC_URLS.map((url) => invitations.answerLink(url, "abc")),
+      hunts: INVITATION_HUNTS.map((hunt) => ({
+        plan: invitations.sendPlan(hunt, at),
+        refusal: invitations.answerRefusal(hunt, at),
+        view: invitations.publicAnswerView(
+          hunt,
+          { participation: "waiting_list" },
+          at,
+        ),
+        messages: invitations.invitationMessages({
+          body: "Battue le {date}.{#plusieurs} OUI {jour}{/plusieurs} {lien}",
+          hunt,
+          link: "https://diane.example.org/r/abc",
+          several: true,
+        }),
+      })),
+    });
+  });
+
+  it("builds transport requests exactly like Node", async () => {
+    const config = transports.transportConfig(
+      (name) => (TRANSPORT_ENV as Record<string, string>)[name] ?? "",
+    );
+
+    expect(
+      await inJsvm(pocketbase.url, "transports", {
+        texts: TRANSPORT_TEXTS,
+        env: TRANSPORT_ENV,
+      }),
+    ).toStrictEqual({
+      config,
+      base64: TRANSPORT_TEXTS.map((text) => transports.base64(text)),
+      requests: TRANSPORT_TEXTS.map((text) =>
+        transports.gatewayRequest(config.sms, { to: "+33639981000", text }),
+      ),
     });
   });
 
