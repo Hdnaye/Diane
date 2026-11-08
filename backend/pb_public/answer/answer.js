@@ -140,7 +140,7 @@ export async function start({ document, location, fetch }) {
   function showUnreachable() {
     showError(
       "Impossible de joindre le serveur.",
-      "Vérifiez votre connexion Internet, puis appuyez sur « Réessayer ».",
+      "Vérifiez votre connexion Internet, puis appuyez sur «\u00a0Réessayer\u00a0».",
       true,
     );
   }
@@ -152,6 +152,9 @@ export async function start({ document, location, fetch }) {
   function setStatus(text, kind = "") {
     status.className = kind ? `status ${kind}` : "status";
     status.textContent = text;
+    // Below the buttons: may be off screen on a small phone. Missing in
+    // old browsers (and jsdom).
+    status.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
   }
 
   /** @param {AnswerView} view */
@@ -252,7 +255,7 @@ export async function start({ document, location, fetch }) {
     setSending(false);
     if (!result) {
       setStatus(
-        "Votre réponse n'a pas pu être envoyée : le serveur est injoignable. Vérifiez votre connexion Internet, puis appuyez sur « Réessayer ».",
+        "Votre réponse n'a pas pu être envoyée : le serveur est injoignable. Vérifiez votre connexion Internet, puis appuyez sur «\u00a0Réessayer\u00a0».",
         "is-error",
       );
       sendRetry.hidden = false;
