@@ -1,10 +1,4 @@
-import {
-  formatLongDay,
-  formatTime,
-  fromDateKey,
-  shiftTime,
-  toDateKey,
-} from '@/lib/dates';
+import { formatLongDay, formatTime, fromDateKey, shiftTime, toDateKey } from '@/lib/dates';
 
 describe('date helpers', () => {
   it('writes a day in full, in French, without the year', () => {
