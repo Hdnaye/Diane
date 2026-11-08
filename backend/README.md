@@ -38,6 +38,13 @@ authenticates silently against the single account of the `organizers` auth
 collection, whose password is a long random secret key. Every Diane
 collection is reserved to it (`@request.auth.collectionName =
 "organizers"`); anonymous requests see nothing and can change nothing.
+Record requests (list, view, create, update, delete) on these collections
+without a valid organizer session (no token, invalid or expired token) get
+an explicit **401** (`pb_hooks/organizer-access.pb.js`), not PocketBase's
+default 200 with an empty list: the app must not believe there is no data
+when its session is gone (it should log in again). The public routes
+(`/api/diane/r/...`, `/r/...`), the SMS gateway webhook and the auth routes
+are not concerned.
 
 ```sh
 cp .env.example .env            # never committed
@@ -48,7 +55,9 @@ npm run setup                   # creates or updates the account
 `npm run setup` runs `pocketbase organizer-upsert` (a console command
 defined in `pb_hooks/organizer-command.pb.js`) with these variables;
 variables already set in the environment win over `.env`. Re-run it after
-changing the key: the existing account is updated, never duplicated. The
+changing the key: the existing account is updated, never duplicated.
+Running it again with the same email and key changes nothing and keeps the
+app's session valid; a new key or email ends it (new token key). The
 app authenticates with `POST /api/collections/organizers/auth-with-password`
 (`identity` = email, `password` = key) and sends the returned token.
 No e-mail flow applies to organizer accounts (password reset, verification,
@@ -116,6 +125,7 @@ Routes (`pb_hooks/send-invitations.pb.js`, `pb_hooks/web-answers.pb.js`):
   than a parameter of `send-invitations`: a separate action in the app
   ("Renvoyer les échecs"), which never invites anybody, while
   `send-invitations` keeps its contract.
+- `GET /r/{token}` (public): the members' answer page (see below).
 - `GET /api/diane/r/{token}` (public): the hunt (date, time, French labels,
   cancelled), the deadline, the member's own `participation` / `answer` and
   `can_answer` (+ `refusal`). Nothing personal; unknown token: generic 404.
@@ -125,6 +135,43 @@ Routes (`pb_hooks/send-invitations.pb.js`, `pb_hooks/web-answers.pb.js`):
   hunt.
 - `GET /api/diane/hunts/{id}/attendance` (organizer): present, waiting list
   (invitation ids, first come first), absent, pending, free places.
+
+### Members' answer page
+
+`{DIANE_PUBLIC_URL}/r/{token}` serves `pb_public/answer/index.html`, the
+same page whatever the token (`pb_hooks/answer-page.pb.js`); its script
+(`answer.js`, started by `main.js`) reads the token in the URL and only
+calls `GET`/`POST /api/diane/r/{token}`. Not a page of the Expo app
+(CLAUDE.md): plain HTML/CSS/JS, no framework, no build, no dependency, no
+cookie, no browser storage, never the organizer key. For elderly members:
+hunt date and time in large type, the deadline, the current answer, two
+64 px buttons "Je viens" / "Je ne viens pas", a confirmation announced to
+screen readers (`aria-live`, waiting list included), and plain messages for
+a passed deadline, a cancelled or closed hunt, an invalid link, or an
+unreachable server ("Réessayer").
+
+- Colors copied from the app's design tokens (`app/src/theme/tokens.js`)
+  into `answer.css` (`--primary` = `colors.primary.DEFAULT`,
+  `--primary-foreground` = `colors.primary.foreground`...):
+  `tests/unit/answer-page-files.test.ts` fails when they differ, or when
+  the CSS uses another color. Update both together.
+- Font: Atkinson Hyperlegible served from `pb_public/answer/fonts/` (SIL
+  Open Font License, `fonts/OFL.txt`), `system-ui` as fallback. Nothing is
+  loaded from another site (no Google Fonts: RGPD), checked by the same test.
+- Headers of `/r/...` and `/answer/...`: `Content-Security-Policy:
+default-src 'self'; base-uri 'none'; object-src 'none'; form-action
+'none'; frame-ancestors 'none'` (no inline script or style),
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` (also a
+  `<meta name="referrer">`: the URL carries the token), `X-Frame-Options:
+DENY`, `Cache-Control: no-cache` (revalidated, no personal data).
+  `/api/diane/r/...` answers carry `Cache-Control: no-store`.
+- PocketBase serves `backend/pb_public/` (`--publicDir`, set by
+  `scripts/paths.js`; PocketBase's default is `bin/pb_public`). In
+  production, keep `pb_public/` next to `pb_hooks/` and pass the same flag.
+- Tests: `tests/unit/answer-page.test.ts` runs the real page in jsdom with
+  a fake server (display, answers, errors);
+  `tests/integration/answer-page.test.ts` checks the headers and answers
+  through the page against a PocketBase instance.
 
 Waiting list (`pb_hooks/lib/waiting-list.cjs`): a yes is `present` while
 places are free (`max_participants` 0: no limit), else `waiting_list`,
@@ -193,8 +240,9 @@ PocketBase's default rules apply to guests only: the organizer can create
 many records in a row (an import, a demo data set). Logging in is always a
 guest request, so `*:auth` still applies to the app's silent login: the app
 should retry after a short delay on a 429. Tokens (about 256 bits) cannot be
-enumerated anyway; the answer rule only slows down abuse. Adjust in
-Settings > Rate limits.
+enumerated anyway; the answer rule only slows down abuse. Guests creating
+records in Diane collections get a 401 before `*:create` is counted (see
+"Organizer access"). Adjust in Settings > Rate limits.
 
 #### Deployment behind a reverse proxy (Tailscale Funnel...)
 
@@ -277,4 +325,6 @@ bin/pocketbase superuser upsert EMAIL PASSWORD --dir=pb_data
   `tests/integration/instance.ts`. Test instances run with
   `--automigrate=false`: changing a collection in a test never writes a
   migration into `pb_migrations/`.
+- `pb_public/` — static files served by PocketBase: the members' answer
+  page (browser ES modules, linted and type-checked with DOM types).
 - `bin/` and `pb_data/` are git-ignored.

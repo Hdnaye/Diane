@@ -15,6 +15,8 @@ export const POCKETBASE_BIN =
 export const DATA_DIR = path.join(BACKEND_DIR, "pb_data");
 export const HOOKS_DIR = path.join(BACKEND_DIR, "pb_hooks");
 export const MIGRATIONS_DIR = path.join(BACKEND_DIR, "pb_migrations");
+/** Static files served by PocketBase (the members' answer page). */
+export const PUBLIC_DIR = path.join(BACKEND_DIR, "pb_public");
 
 /** Local secrets (not committed, see .env.example). */
 export const ENV_FILE =
@@ -42,5 +44,7 @@ export function pocketbaseArgs(
     `--dir=${dataDir}`,
     `--hooksDir=${hooksDir}`,
     `--migrationsDir=${MIGRATIONS_DIR}`,
+    // Default: next to the binary (bin/pb_public).
+    `--publicDir=${PUBLIC_DIR}`,
   ];
 }

@@ -3,11 +3,12 @@ import {
   DATA_DIR,
   HOOKS_DIR,
   MIGRATIONS_DIR,
+  PUBLIC_DIR,
   pocketbaseArgs,
 } from "../../scripts/paths.js";
 
 describe("pocketbaseArgs", () => {
-  it("disables dev mode and points to this project's directories", () => {
+  it("disables dev mode and points to this project's directories (the answer page in pb_public/)", () => {
     expect(pocketbaseArgs(["migrate", "up"])).toEqual([
       "migrate",
       "up",
@@ -16,6 +17,7 @@ describe("pocketbaseArgs", () => {
       `--dir=${DATA_DIR}`,
       `--hooksDir=${HOOKS_DIR}`,
       `--migrationsDir=${MIGRATIONS_DIR}`,
+      `--publicDir=${PUBLIC_DIR}`,
     ]);
   });
 
@@ -28,6 +30,7 @@ describe("pocketbaseArgs", () => {
       "--dir=/data",
       "--hooksDir=/hooks",
       `--migrationsDir=${MIGRATIONS_DIR}`,
+      `--publicDir=${PUBLIC_DIR}`,
     ]);
   });
 });
