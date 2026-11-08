@@ -6,7 +6,11 @@ import { Text } from '@/components/ui/text';
 export type Step = {
   /** Short visible text, e.g. "− 1 h". */
   text: string;
-  /** Full name for screen readers, e.g. "Rendez-vous : une heure plus tôt". */
+  /**
+   * What the step does, e.g. "rendez-vous une heure plus tôt". Screen readers announce
+   * "− 1 h, rendez-vous une heure plus tôt": the name starts with the visible text
+   * (WCAG 2.5.3 Label in Name).
+   */
   label: string;
   onPress: () => void;
 };
@@ -38,7 +42,7 @@ export function StepperField({
               key={step.label}
               variant="secondary"
               className="flex-1"
-              aria-label={step.label}
+              aria-label={`${step.text}, ${step.label}`}
               onPress={step.onPress}>
               <Text>{step.text}</Text>
             </Button>

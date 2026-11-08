@@ -119,24 +119,24 @@ export default function NewHuntScreen() {
                 [
                   {
                     text: '− 1 h',
-                    label: 'Rendez-vous : une heure plus tôt',
+                    label: 'rendez-vous une heure plus tôt',
                     onPress: () => onChange(shiftTime(value, -60)),
                   },
                   {
                     text: '+ 1 h',
-                    label: 'Rendez-vous : une heure plus tard',
+                    label: 'rendez-vous une heure plus tard',
                     onPress: () => onChange(shiftTime(value, 60)),
                   },
                 ],
                 [
                   {
                     text: '− 15 min',
-                    label: 'Rendez-vous : 15 minutes plus tôt',
+                    label: 'rendez-vous 15 minutes plus tôt',
                     onPress: () => onChange(shiftTime(value, -15)),
                   },
                   {
                     text: '+ 15 min',
-                    label: 'Rendez-vous : 15 minutes plus tard',
+                    label: 'rendez-vous 15 minutes plus tard',
                     onPress: () => onChange(shiftTime(value, 15)),
                   },
                 ],
@@ -183,24 +183,24 @@ export default function NewHuntScreen() {
                   [
                     {
                       text: '− 1 jour',
-                      label: 'Date limite : un jour plus tôt',
+                      label: 'date limite un jour plus tôt',
                       onPress: () => onChange(addDays(value, -1)),
                     },
                     {
                       text: '+ 1 jour',
-                      label: 'Date limite : un jour plus tard',
+                      label: 'date limite un jour plus tard',
                       onPress: () => onChange(addDays(value, 1)),
                     },
                   ],
                   [
                     {
                       text: '− 1 h',
-                      label: 'Date limite : une heure plus tôt',
+                      label: 'date limite une heure plus tôt',
                       onPress: () => onChange(addHours(value, -1)),
                     },
                     {
                       text: '+ 1 h',
-                      label: 'Date limite : une heure plus tard',
+                      label: 'date limite une heure plus tard',
                       onPress: () => onChange(addHours(value, 1)),
                     },
                   ],
