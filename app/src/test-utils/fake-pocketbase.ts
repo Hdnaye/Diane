@@ -39,6 +39,7 @@ export function fakeToken(seconds = 3600, id = 'fake-token') {
 }
 
 export const AUTH_PATH = '/api/collections/organizers/auth-with-password';
+export const REFRESH_PATH = '/api/collections/organizers/auth-refresh';
 
 /** A successful organizer authentication, with a fictitious organizer. */
 export function authSuccess(token = fakeToken()): FakeResponse {
@@ -59,4 +60,14 @@ export function authSuccess(token = fakeToken()): FakeResponse {
 export const tooManyRequests: FakeResponse = {
   status: 429,
   body: { status: 429, message: 'Too Many Requests.', data: {} },
+};
+
+/** What PocketBase answers to a revoked or invalid token on auth-refresh. */
+export const unauthorized: FakeResponse = {
+  status: 401,
+  body: {
+    status: 401,
+    message: 'The request requires valid record authorization token.',
+    data: {},
+  },
 };

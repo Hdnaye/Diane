@@ -7,7 +7,9 @@ import {
   FAKE_API_URL,
   fakePocketBase,
   fakeToken,
+  REFRESH_PATH,
   tooManyRequests,
+  unauthorized,
 } from '@/test-utils/fake-pocketbase';
 
 const credentials = { organizerEmail: 'organizer@example.com', organizerKey: 'fake-key-for-tests' };
@@ -19,6 +21,13 @@ function setUp(options: Parameters<typeof createOrganizerSession>[2] = {}) {
 
 const authRequests = (requests: { path: string }[]) =>
   requests.filter((request) => request.path === AUTH_PATH);
+const paths = (requests: { path: string }[]) => requests.map((request) => request.path);
+
+/** A clock the tests move forward. */
+function fakeClock() {
+  let now = 1_000_000;
+  return { now: () => now, advance: (ms: number) => (now += ms) };
+}
 
 describe('organizer session', () => {
   it('authenticates silently with the organizer e-mail and key', async () => {
@@ -128,5 +137,103 @@ describe('organizer session', () => {
       AUTH_PATH,
       '/api/health',
     ]);
+  });
+
+  describe('token revoked on the server (e.g. organizer account updated by `npm run setup`)', () => {
+    // PocketBase treats an invalid token as a guest: lists come back empty, creations are
+    // refused with a 400, never a 401. Only auth-refresh tells a revoked token apart.
+
+    it('has the server check the token again when the last check is over a minute old', async () => {
+      const clock = fakeClock();
+      const { requests } = fakePocketBase(() => authSuccess());
+      const { session } = setUp({ now: clock.now });
+      await session.connect();
+
+      clock.advance(30_000);
+      await session.connect();
+      expect(paths(requests)).toEqual([AUTH_PATH]);
+
+      clock.advance(31_000);
+      await session.connect();
+      expect(paths(requests)).toEqual([AUTH_PATH, REFRESH_PATH]);
+    });
+
+    it('authenticates again when the server says the token is no longer valid', async () => {
+      const clock = fakeClock();
+      let revoked = false;
+      const { requests, fetchMock } = fakePocketBase((request) =>
+        request.path === REFRESH_PATH && revoked ? unauthorized : authSuccess()
+      );
+      const { pb, session } = setUp({ now: clock.now });
+      await session.connect();
+
+      revoked = true;
+      clock.advance(61_000);
+      await session.connect();
+
+      expect(paths(requests)).toEqual([AUTH_PATH, REFRESH_PATH, AUTH_PATH]);
+      expect(pb.authStore.isValid).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('checks the token when a result is doubtful and retries once with a new one', async () => {
+      let revoked = true;
+      const { requests } = fakePocketBase((request) => {
+        if (request.path === REFRESH_PATH) {
+          return revoked ? unauthorized : authSuccess();
+        }
+        if (request.path === AUTH_PATH) {
+          revoked = false;
+          return authSuccess();
+        }
+        return { status: 200, body: { items: revoked ? [] : ['hunt'] } };
+      });
+      const { pb, session } = setUp();
+      await session.connect();
+      revoked = true;
+
+      const result = await session.run(() => pb.send<{ items: string[] }>('/api/list', {}), {
+        isDoubtful: (outcome) => 'result' in outcome && outcome.result.items.length === 0,
+      });
+
+      expect(result).toEqual({ items: ['hunt'] });
+      expect(paths(requests)).toEqual([
+        AUTH_PATH,
+        '/api/list',
+        REFRESH_PATH,
+        AUTH_PATH,
+        '/api/list',
+      ]);
+    });
+
+    it('keeps a doubtful result when the server confirms the token', async () => {
+      const { requests } = fakePocketBase((request) =>
+        request.path === '/api/list' ? { status: 200, body: { items: [] } } : authSuccess()
+      );
+      const { pb, session } = setUp();
+
+      const result = await session.run(() => pb.send<{ items: string[] }>('/api/list', {}), {
+        isDoubtful: (outcome) => 'result' in outcome && outcome.result.items.length === 0,
+      });
+
+      expect(result).toEqual({ items: [] });
+      expect(paths(requests)).toEqual([AUTH_PATH, '/api/list', REFRESH_PATH]);
+    });
+
+    it('checks the token on a doubtful error, retries once, and passes on a confirmed error', async () => {
+      const refused = { status: 400, body: { status: 400, message: 'Failed.', data: {} } };
+      const { requests } = fakePocketBase((request) =>
+        request.path === '/api/create' ? refused : authSuccess()
+      );
+      const { pb, session } = setUp();
+
+      await expect(
+        session.run(() => pb.send('/api/create', { method: 'POST' }), {
+          isDoubtful: (outcome) => 'error' in outcome,
+        })
+      ).rejects.toMatchObject({ status: 400 });
+      // The token is valid: the error is real, the request is not sent again.
+      expect(paths(requests)).toEqual([AUTH_PATH, '/api/create', REFRESH_PATH]);
+    });
   });
 });

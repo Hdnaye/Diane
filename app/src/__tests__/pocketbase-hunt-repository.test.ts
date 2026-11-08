@@ -9,7 +9,11 @@ import {
   FAKE_API_URL,
   fakePocketBase,
   fakeToken,
+  REFRESH_PATH,
+  unauthorized,
   type FakeHandler,
+  type FakeRequest,
+  type FakeResponse,
 } from '@/test-utils/fake-pocketbase';
 
 const HUNTS_PATH = '/api/collections/hunts/records';
@@ -163,5 +167,82 @@ describe('PocketBase hunt repository', () => {
 
     await expect(creation).rejects.not.toBeInstanceOf(HuntDayTakenError);
     await expect(creation).rejects.toMatchObject({ status: 400 });
+  });
+
+  describe('with a token revoked on the server', () => {
+    // PocketBase treats a revoked token as a guest: an empty list, a creation refused with a 400.
+    function revokedServer(handler: (request: FakeRequest, guest: boolean) => FakeResponse) {
+      let revoked = false;
+      const server = fakePocketBase((request) => {
+        if (request.path === AUTH_PATH) {
+          revoked = false;
+          return authSuccess(token);
+        }
+        if (request.path === REFRESH_PATH) {
+          return revoked ? unauthorized : authSuccess(token);
+        }
+        return handler(request, revoked);
+      });
+      const pb = createPocketBaseClient(FAKE_API_URL);
+      const session = createOrganizerSession(pb, {
+        organizerEmail: 'organizer@example.com',
+        organizerKey: 'fake-key-for-tests',
+      });
+      const repository = createPocketBaseHuntRepository(pb, session);
+      return { ...server, repository, revoke: () => (revoked = true) };
+    }
+    const paths = (requests: FakeRequest[]) =>
+      requests.map((request) => request.path.replace(/\?.*/, ''));
+
+    it('authenticates again and lists the hunts instead of an empty list', async () => {
+      const { requests, repository, revoke } = revokedServer((_request, guest) => ({
+        status: 200,
+        body: page(guest ? [] : [huntRecord({ id: 'hunt1', date: '2026-11-14' })]),
+      }));
+      await repository.list();
+      revoke();
+      requests.length = 0;
+
+      const hunts = await repository.list();
+
+      expect(hunts.map((hunt) => hunt.date)).toEqual(['2026-11-14']);
+      expect(paths(requests)).toEqual([HUNTS_PATH, REFRESH_PATH, AUTH_PATH, HUNTS_PATH]);
+    });
+
+    it('authenticates again and creates the hunt instead of failing', async () => {
+      const { requests, repository, revoke } = revokedServer((request, guest) =>
+        guest
+          ? { status: 400, body: { status: 400, message: 'Failed to create record.', data: {} } }
+          : {
+              status: 200,
+              body: huntRecord({
+                id: 'hunt5',
+                ...(request.body as Pick<HuntsResponse, 'date'>),
+              }),
+            }
+      );
+      await repository.list();
+      revoke();
+      requests.length = 0;
+
+      const created = await repository.create(newHunt);
+
+      expect(created).toMatchObject({ id: 'hunt5', date: '2026-11-20' });
+      expect(paths(requests)).toEqual([HUNTS_PATH, REFRESH_PATH, AUTH_PATH, HUNTS_PATH]);
+    });
+
+    it('does not check the token when the day is taken', async () => {
+      const { requests, repository } = revokedServer(() => ({
+        status: 400,
+        body: {
+          status: 400,
+          message: 'Failed to create record.',
+          data: { date: { code: 'validation_not_unique', message: 'Value must be unique.' } },
+        },
+      }));
+
+      await expect(repository.create(newHunt)).rejects.toBeInstanceOf(HuntDayTakenError);
+      expect(paths(requests)).toEqual([AUTH_PATH, HUNTS_PATH]);
+    });
   });
 });
