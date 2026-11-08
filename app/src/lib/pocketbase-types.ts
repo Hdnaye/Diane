@@ -134,14 +134,32 @@ export const InvitationsAnsweredViaOptions = {
 } as const;
 export type InvitationsAnsweredViaOptions =
   (typeof InvitationsAnsweredViaOptions)[keyof typeof InvitationsAnsweredViaOptions];
+
+export const InvitationsSmsStatusOptions = {
+  sent: 'sent',
+  failed: 'failed',
+  skipped: 'skipped',
+} as const;
+export type InvitationsSmsStatusOptions =
+  (typeof InvitationsSmsStatusOptions)[keyof typeof InvitationsSmsStatusOptions];
+
+export const InvitationsEmailStatusOptions = {
+  sent: 'sent',
+  failed: 'failed',
+  skipped: 'skipped',
+} as const;
+export type InvitationsEmailStatusOptions =
+  (typeof InvitationsEmailStatusOptions)[keyof typeof InvitationsEmailStatusOptions];
 export type InvitationsRecord = {
   answered_at?: IsoDateString;
   answered_via?: InvitationsAnsweredViaOptions;
   created: IsoAutoDateString;
+  email_status?: InvitationsEmailStatusOptions;
   hunt: RecordIdString;
   id: string;
   member: RecordIdString;
   participation: InvitationsParticipationOptions;
+  sms_status?: InvitationsSmsStatusOptions;
   token: string;
   updated: IsoAutoDateString;
 };
