@@ -72,9 +72,11 @@ Migrations in `pb_migrations/`, validation and defaults in `pb_hooks/*.pb.js`:
   outcome of the invitation per channel, `sms_status` / `email_status`:
   `sending` (claimed by a sending request, not sent yet), `sent`, `failed`
   (transport missing or in error) or `skipped` (no phone / no e-mail);
-  same statuses for the reminder (`reminder_sms_status` /
-  `reminder_email_status`) and the cancellation notice
-  (`cancellation_sms_status` / `cancellation_email_status`).
+  same statuses, plus `unknown` (timed out: may have been sent), for the
+  reminder (`reminder_sms_status` / `reminder_email_status`) and the
+  cancellation notice (`cancellation_sms_status` /
+  `cancellation_email_status`), with their attempt counters
+  (`reminder_sms_attempts`...).
 - `message_templates`: name, body with `{date}`, `{heure}`, `{limite}`,
   `{jour}`, `{lien}` and the section `{#plusieurs}...{/plusieurs}`, kept only
   for a member with several open invitations (rendered by
@@ -82,7 +84,7 @@ Migrations in `pb_migrations/`, validation and defaults in `pb_hooks/*.pb.js`:
 - `sms_review_queue`: SMS to check ("à vérifier"): sender number, body,
   reception time, `member` when known, `reason` (`unknown_sender`,
   `inactive_member`, `unrecognized`, `no_open_invitation`,
-  `several_open_invitations`, `unknown_day`, `ambiguous_day`,
+  `several_open_invitations`, `ambiguous`, `unknown_day`, `ambiguous_day`,
   `deadline_passed`, `hunt_closed`), `resolved` and `resolved_at` (set by
   the hook when resolved).
 - `sms_inbound`: SMS webhooks already handled: gateway event id (unique),
@@ -148,7 +150,9 @@ Routes (`pb_hooks/send-invitations.pb.js`, `pb_hooks/web-answers.pb.js`):
   `{ notified, sms: {...}, email: {...} }`. Idempotent, same mechanics as
   the invitations (`cancellation_*_status` claimed `sending` in a
   transaction): calling it again tells nobody twice and only resends the
-  notices `failed` or left `sending` by an interrupted request. A draft is
+  notices `failed` or left `sending` by an interrupted request, at most 3
+  attempts per channel and never a notice that timed out (`unknown`, see
+  Reminders). A draft is
   cancelled without notice. Later answers are refused: web 409
   `hunt_cancelled` (« La battue est annulée. »), SMS « La battue du ... est
   annulée. »; sending invitations: 409 `hunt_cancelled`.
@@ -235,8 +239,25 @@ receives the SMS of the gateway phone, sent by SMS Gateway for Android as
 `DIANE_SMS_WEBHOOK_SECRET`, compares in constant time
 (`$security.equal`) and refuses a timestamp more than 5 minutes away
 (replay). Missing or wrong signature, stale timestamp, or no secret
-configured: the same `401` without detail (and nothing recorded).
-Other events: `200 { "status": "ignored" }`.
+configured: the same `401` without detail (and nothing recorded). When
+only the timestamp fails (valid signature), the backend logs « SMS
+webhook refused: clock skew » with the skew in seconds (`skew_s`, nothing
+else). Other events: `200 { "status": "ignored" }`.
+
+**Gateway phone clock**: turn on automatic network date and time on the
+gateway phone. The app signs each attempt with its own clock (timestamp in
+seconds, recomputed on every retry, so retries are not refused); a clock
+more than 5 minutes off gets every webhook refused, until the app gives up
+(about 2 days of retries) and the SMS are lost. Look for « clock skew » in
+the logs if replies stop arriving.
+
+**Threat model**: the signature authenticates the gateway phone (who holds
+the key), not the sender of the SMS. A spoofed sender number (possible
+with some providers) is taken for the member's reply. The confirmation
+SMS goes to the real member's number, so they would notice an answer they
+did not send and can correct it (or tell the organizer); the organizer
+also sees `answered_via: sms`. Acceptable for the POC (low stakes: a
+head count).
 
 **Handling** (answer `200 { "status": ... }`, nothing personal):
 
@@ -250,7 +271,10 @@ Other events: `200 { "status": "ignored" }`.
   open invitation for it, deadline passed or hunt closed. An invitation is
   open while the member may answer (answered or not, deadline not passed,
   hunt not cancelled, hunt not started). Without a day, the reply applies
-  to the single open invitation (several → `several_open_invitations`);
+  to the single open invitation (several → `several_open_invitations`;
+  when another upcoming hunt still waits for the member's answer, its
+  deadline passed → `ambiguous`: in doubt, to check, a late « OUI » for
+  tomorrow must not land on next week's hunt);
   with a day (`OUI 15`), to the hunt of that day of the month (none →
   `unknown_day`, several months apart → `ambiguous_day`).
 - `applied`: recorded like a web answer (same code,
@@ -263,13 +287,13 @@ Other events: `200 { "status": "ignored" }`.
 SMS for every date, tested), sent only to an active member whose reply was
 recognized:
 
-- « Présence OUI enregistrée pour la battue du samedi 14 novembre.
-  Modifiable jusqu'au jeudi 12 novembre à 20h00. »
-- « Absence enregistrée pour la battue du ... Modifiable jusqu'au ... »
-- « Vous etes sur liste d'attente pour la battue du ... Modifiable jusqu'au
-  ... » (accents outside GSM-7 transliterated)
+- « Présence OUI enregistrée pour la battue du samedi 14 novembre. Pour
+  changer, renvoyez OUI 14 ou NON 14 avant le jeudi 12 novembre à 20h00. »
+- « Absence enregistrée pour la battue du ... Pour changer, renvoyez ... »
+- « Vous etes sur liste d'attente pour la battue du ... Pour changer,
+  renvoyez ... » (accents outside GSM-7 transliterated)
 
-Without deadline, the « Modifiable jusqu'au » part is left out. No answer
+Without deadline, « avant le ... » is left out. No answer
 at all to an SMS to check (decision): an acknowledgement (« Message reçu,
 l'organisateur va vérifier ») would cost an SMS for every spam, operator
 message or unknown number, could start an exchange with an answering
@@ -317,11 +341,28 @@ deadline: invitations still `pending` of active members, hunts
 time (someone invited 15 hours before the deadline just got the
 invitation). Same mechanics as the invitations (`reminder_*_status`
 claimed `sending` in a transaction); until the deadline, each run sends
-again the reminders `failed` or left `sending` by an interrupted run.
+again the reminders `failed` or left `sending` by an interrupted run, with
+limits (`noticeChannelsToSend` / `noticeRecord` in
+`pb_hooks/lib/notifications.cjs`, same for cancellation notices):
+
+- at most **3 attempts** per channel (`reminder_*_attempts`); a message
+  not attempted (gateway already found unreachable during the run, not
+  configured) does not count;
+- a **timeout** once connected (the phone may accept the SMS after the 5 s
+  wait) is recorded `unknown` and **never retried automatically**: a slow
+  phone would otherwise send the same reminder every 10 minutes. Only
+  refused connections and HTTP / SMTP errors (`failed`) are retried;
+- each run tries the least attempted first, in a random order otherwise:
+  after a timeout the rest of a run is cut off (gateway unreachable), and
+  the members cut off come first on the next run.
+
+Invitations keep their contract: a timeout is `failed` and is resent only
+when the organizer asks for it (`resend-failed`).
 
 - SMS (GSM-7, one SMS for every date, no link to stay short; the day makes
   the reply unambiguous): « Rappel : battue du samedi 14 novembre à 8h00.
-  Répondez par SMS OUI 14 ou NON 14 avant le jeudi 12 novembre à 20h00. »
+  Vous n'avez pas encore répondu. Répondez par SMS OUI 14 ou NON 14 avant
+  le jeudi 12 novembre à 20h00. »
 - E-mail « Rappel : battue du samedi 14 novembre », with the answer link.
 
 ### RGPD: retention of SMS data
