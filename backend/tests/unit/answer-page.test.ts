@@ -176,6 +176,23 @@ describe("answer page", () => {
     );
   });
 
+  it("brings the confirmation into view (below the buttons on small phones)", async () => {
+    const { fetch } = fakeFetch(
+      json(200, view()),
+      json(200, view({ participation: "present", answer: "yes" })),
+    );
+    const page = await openPage(fetch);
+    const scrollIntoView = vi.fn();
+    page.$("status").scrollIntoView = scrollIntoView;
+
+    (page.$("answer-yes") as HTMLButtonElement).click();
+
+    await waitFor(() =>
+      expect(page.$("status").textContent).toContain("C'est noté"),
+    );
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
   it("records a no and confirms it", async () => {
     const { fetch, calls } = fakeFetch(
       json(200, view({ participation: "present", answer: "yes" })),
