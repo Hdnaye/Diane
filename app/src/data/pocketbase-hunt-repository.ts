@@ -19,12 +19,19 @@ export function createPocketBaseHuntRepository(
   const hunts = () => pb.collection(Collections.Hunts);
   return {
     async list() {
-      const records = await session.run(() => hunts().getFullList<HuntsResponse>({ sort: 'date' }));
+      const records = await session.run(
+        () => hunts().getFullList<HuntsResponse>({ sort: 'date' }),
+        // A revoked token sees an empty list (PocketBase treats it as a guest).
+        { isDoubtful: (outcome) => 'result' in outcome && outcome.result.length === 0 }
+      );
       return records.map(toHunt);
     },
     async create(hunt) {
       try {
-        const record = await session.run(() => hunts().create<HuntsResponse>(toCreateRecord(hunt)));
+        const record = await session.run(
+          () => hunts().create<HuntsResponse>(toCreateRecord(hunt)),
+          { isDoubtful: (outcome) => 'error' in outcome && isRefusedWithoutReason(outcome.error) }
+        );
         return toHunt(record);
       } catch (error) {
         if (isDayTaken(error)) {
@@ -65,6 +72,18 @@ function toIsoInstant(dateTime: string): string {
 /** ISO instant → PocketBase's datetime format, "2026-11-09 19:00:00.000Z". */
 function toPocketBaseDateTime(instant: string): string {
   return new Date(instant).toISOString().replace('T', ' ');
+}
+
+/**
+ * A creation refused without any field error (400) or forbidden (403): what a revoked token,
+ * treated as a guest by PocketBase, gets. A refusal naming a field is about the data.
+ */
+function isRefusedWithoutReason(error: unknown): boolean {
+  return (
+    error instanceof ClientResponseError &&
+    (error.status === 403 ||
+      (error.status === 400 && Object.keys(error.response?.data ?? {}).length === 0))
+  );
 }
 
 /** The unique index on `date` refused the hunt: there is already one that day. */
