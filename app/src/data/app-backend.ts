@@ -1,22 +1,33 @@
 import type { HuntRepository } from '@/data/hunt-repository';
+import type { MemberRepository } from '@/data/member-repository';
 import { createPocketBaseHuntRepository } from '@/data/pocketbase-hunt-repository';
+import { createPocketBaseMemberRepository } from '@/data/pocketbase-member-repository';
 import { createOrganizerSession, createPocketBaseClient } from '@/data/pocketbase-session';
 import { ServerConfigMissingError, type ServerConnection } from '@/data/server-connection';
 import { readApiConfig, type ApiConfig } from '@/lib/api-config';
 
-export type AppBackend = { connection: ServerConnection; repository: HuntRepository };
+export type AppBackend = {
+  connection: ServerConnection;
+  repository: HuntRepository;
+  members: MemberRepository;
+};
 
 /** The PocketBase back-end of the app, or one failing clearly when `app/.env` is incomplete. */
 export function createAppBackend(config: ApiConfig | null): AppBackend {
   if (!config) {
     const fail = () => Promise.reject(new ServerConfigMissingError());
-    return { connection: { connect: fail }, repository: { list: fail, create: fail } };
+    return {
+      connection: { connect: fail },
+      repository: { list: fail, create: fail },
+      members: { list: fail, create: fail, update: fail, remove: fail, setActive: fail },
+    };
   }
   const pb = createPocketBaseClient(config.url);
   const session = createOrganizerSession(pb, config);
   return {
     connection: { connect: () => session.connect() },
     repository: createPocketBaseHuntRepository(pb, session),
+    members: createPocketBaseMemberRepository(pb, session),
   };
 }
 
