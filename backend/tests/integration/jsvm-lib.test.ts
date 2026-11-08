@@ -21,7 +21,7 @@ const { isValidDay, parisToUtc, utcToParis, parseUtcDateTime } =
   require("../../pb_hooks/lib/paris-time.cjs") as typeof import("../../pb_hooks/lib/paris-time.cjs");
 const { smsSegments, toGsm7 } =
   require("../../pb_hooks/lib/sms-encoding.cjs") as typeof import("../../pb_hooks/lib/sms-encoding.cjs");
-const { messageVariables, renderTemplate } =
+const { messageVariables, renderTemplate, renderSms, DEFAULT_TEMPLATE_BODY } =
   require("../../pb_hooks/lib/message-template.cjs") as typeof import("../../pb_hooks/lib/message-template.cjs");
 
 // Test-only route, added to a copy of pb_hooks/.
@@ -55,8 +55,15 @@ routerAdd("POST", "/api/test/message-template", (e) => {
   const { hunts, body } = e.requestInfo().body;
   return e.json(
     200,
-    hunts.map((hunt) =>
-      lib.renderTemplate(body, lib.messageVariables(hunt, "https://diane.example.org/r/abc")),
+    hunts.flatMap((hunt) =>
+      [false, true].flatMap((several) => {
+        const variables = lib.messageVariables(hunt, "https://diane.example.org/r/abc", { several });
+        return [
+          lib.renderTemplate(body, variables),
+          lib.renderSms(body, variables),
+          lib.renderSms(lib.DEFAULT_TEMPLATE_BODY, variables),
+        ];
+      }),
     ),
   );
 });
@@ -127,7 +134,9 @@ const DATETIMES = [
 
 /** Hunts rendered with every template variable. */
 const TEMPLATE_BODY =
-  "Battue le {date} à {heure}. OUI {jour}. Avant le {limite}. {lien} {inconnu}";
+  "Battue le {date} à {heure}. OUI {jour}. Avant le {limite}. {lien} {inconnu}\n" +
+  "{#plusieurs}OUI {jour}{/plusieurs}\nFin{#plusieurs} (plusieurs){/plusieurs}\n" +
+  "{#inconnu}A\nB{/inconnu}\n{#plusieurs}ouvert";
 const HUNTS = [
   {
     date: "2026-11-14",
@@ -295,7 +304,10 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
     expect(
       await inJsvm(pocketbase.url, "sms-encoding", { inputs: SMS_TEXTS }),
     ).toStrictEqual(
-      SMS_TEXTS.map((text) => ({ size: smsSegments(text), gsm7: toGsm7(text) })),
+      SMS_TEXTS.map((text) => ({
+        size: smsSegments(text),
+        gsm7: toGsm7(text),
+      })),
     );
   });
 
@@ -306,11 +318,19 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
         body: TEMPLATE_BODY,
       }),
     ).toStrictEqual(
-      HUNTS.map((hunt) =>
-        renderTemplate(
-          TEMPLATE_BODY,
-          messageVariables(hunt, "https://diane.example.org/r/abc"),
-        ),
+      HUNTS.flatMap((hunt) =>
+        [false, true].flatMap((several) => {
+          const variables = messageVariables(
+            hunt,
+            "https://diane.example.org/r/abc",
+            { several },
+          );
+          return [
+            renderTemplate(TEMPLATE_BODY, variables),
+            renderSms(TEMPLATE_BODY, variables),
+            renderSms(DEFAULT_TEMPLATE_BODY, variables),
+          ];
+        }),
       ),
     );
   });

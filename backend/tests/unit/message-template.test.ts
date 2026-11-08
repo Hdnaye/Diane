@@ -244,7 +244,10 @@ describe("default template", () => {
             {
               date: iso.slice(0, 10),
               meeting_time: "14:30",
-              response_deadline: iso.replace("T00:00:00.000Z", " 17:30:00.000Z"),
+              response_deadline: iso.replace(
+                "T00:00:00.000Z",
+                " 17:30:00.000Z",
+              ),
             },
             LINK,
             { several: true },
