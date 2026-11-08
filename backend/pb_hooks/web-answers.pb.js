@@ -39,14 +39,14 @@ routerAdd("GET", "/api/diane/r/{token}", (e) => {
 // Records the answer, { "answer": "yes" | "no" }, until the deadline. A yes
 // takes a free place or joins the waiting list; the head count is read and
 // written in one transaction (serialized: never more than the maximum).
+// Same logic as SMS replies (shared/answers.cjs).
 routerAdd("POST", "/api/diane/r/{token}", (e) => {
   const lib = /** @type {typeof import("./lib/invitations.cjs")} */ (
     require(`${__hooks}/lib/invitations.cjs`)
   );
-  const { participationAfterAnswer } =
-    /** @type {typeof import("./lib/waiting-list.cjs")} */ (
-      require(`${__hooks}/lib/waiting-list.cjs`)
-    );
+  const { applyAnswer } = /** @type {typeof import("./shared/answers.cjs")} */ (
+    require(`${__hooks}/shared/answers.cjs`)
+  );
   const token = e.request?.pathValue("token") ?? "";
   if (!/^[A-Za-z0-9]{32,64}$/.test(token)) throw new NotFoundError();
   const answer = e.requestInfo().body.answer;
@@ -67,46 +67,17 @@ routerAdd("POST", "/api/diane/r/{token}", (e) => {
     } catch {
       throw new NotFoundError();
     }
-    const hunt = txApp.findRecordById("hunts", invitation.getString("hunt"));
-    const huntFields = {
-      date: hunt.getString("date"),
-      meeting_time: hunt.getString("meeting_time"),
-      response_deadline: hunt.getString("response_deadline"),
-      status: hunt.getString("status"),
-    };
-    const refusal = lib.answerRefusal(huntFields, now);
-    if (refusal) {
-      throw new ApiError(409, refusal.message, {
-        answer: new ValidationError(refusal.code, refusal.message),
+    const { hunt, plan } = applyAnswer(txApp, invitation, answer, "web", now);
+    if (!plan.ok) {
+      throw new ApiError(409, plan.refusal.message, {
+        answer: new ValidationError(plan.refusal.code, plan.refusal.message),
       });
     }
-
-    const others = txApp
-      .findRecordsByFilter(
-        "invitations",
-        "hunt = {:hunt} && id != {:id}",
-        "",
-        0,
-        0,
-        { hunt: hunt.id, id: invitation.id },
-      )
-      .map((other) => other?.getString("participation"));
-    const current = invitation.getString("participation");
-    const next = participationAfterAnswer({
-      current,
-      answer,
-      maxParticipants: hunt.getInt("max_participants"),
-      presentCount: others.filter((p) => p === "present").length,
-      waitingCount: others.filter((p) => p === "waiting_list").length,
-    });
-    // An unchanged answer keeps its time: the waiting list order.
-    if (next !== current) {
-      invitation.set("participation", next);
-      invitation.set("answered_at", new DateTime());
-      invitation.set("answered_via", "web");
-      txApp.save(invitation);
-    }
-    view = lib.publicAnswerView(huntFields, { participation: next }, now);
+    view = lib.publicAnswerView(
+      hunt,
+      { participation: plan.participation },
+      now,
+    );
   });
   return e.json(200, view);
 });

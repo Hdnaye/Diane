@@ -29,6 +29,12 @@ const transports =
   require("../../pb_hooks/lib/transports.cjs") as typeof import("../../pb_hooks/lib/transports.cjs");
 const { redactAnswerTokens } =
   require("../../pb_hooks/lib/log-redaction.cjs") as typeof import("../../pb_hooks/lib/log-redaction.cjs");
+const smsInbound =
+  require("../../pb_hooks/lib/sms-inbound.cjs") as typeof import("../../pb_hooks/lib/sms-inbound.cjs");
+const notifications =
+  require("../../pb_hooks/lib/notifications.cjs") as typeof import("../../pb_hooks/lib/notifications.cjs");
+const retention =
+  require("../../pb_hooks/lib/retention.cjs") as typeof import("../../pb_hooks/lib/retention.cjs");
 const { messageVariables, renderTemplate, renderSms, DEFAULT_TEMPLATE_BODY } =
   require("../../pb_hooks/lib/message-template.cjs") as typeof import("../../pb_hooks/lib/message-template.cjs");
 
@@ -116,7 +122,7 @@ routerAdd("POST", "/api/test/transports", (e) => {
     config,
     base64: texts.map((text) => lib.base64(text)),
     requests: texts.map((text) =>
-      lib.gatewayRequest(config.sms, { to: "+33639981000", text }),
+      lib.gatewayRequest(config.sms, { to: "+33639981000", text, id: "rem-abc" }),
     ),
   });
 });
@@ -125,6 +131,39 @@ routerAdd("POST", "/api/test/log-redaction", (e) => {
   const lib = require(\`\${__hooks}/lib/log-redaction.cjs\`);
   const inputs = e.requestInfo().body.inputs;
   return e.json(200, inputs.map((text) => lib.redactAnswerTokens(text)));
+});
+
+routerAdd("POST", "/api/test/sms-inbound", (e) => {
+  const lib = require(\`\${__hooks}/lib/sms-inbound.cjs\`);
+  const { now, timestamps, bodies, numbers, replies, invitations } =
+    e.requestInfo().body;
+  const at = new Date(now);
+  return e.json(200, {
+    timestamps: timestamps.map((value) => lib.timestampFresh(value, at)),
+    bodies: bodies.map((raw) => lib.parseWebhookEvent(raw)),
+    numbers: numbers.map(([sender, own]) => lib.isOwnNumber(sender, own)),
+    replies: replies.map((reply) => lib.resolveSmsReply(reply, invitations, at)),
+  });
+});
+
+routerAdd("POST", "/api/test/notifications", (e) => {
+  const lib = require(\`\${__hooks}/lib/notifications.cjs\`);
+  const retention = require(\`\${__hooks}/lib/retention.cjs\`);
+  const invitations = require(\`\${__hooks}/lib/invitations.cjs\`);
+  const { hunts, now, answers } = e.requestInfo().body;
+  const at = new Date(now);
+  return e.json(200, {
+    hunts: hunts.map((hunt) => ({
+      confirmations: ["present", "absent", "waiting_list", "cancelled"].map(
+        (outcome) => lib.confirmationSms(outcome, hunt),
+      ),
+      reminder: lib.reminderMessages(hunt, "https://diane.example.org/r/abc"),
+      cancellation: lib.cancellationMessages(hunt),
+      due: lib.reminderDue(hunt, at),
+    })),
+    cutoffs: retention.purgeCutoffs(at),
+    answers: answers.map((input) => invitations.planAnswer(input, at)),
+  });
 });
 
 routerAdd("POST", "/api/test/sms-encoding", (e) => {
@@ -295,6 +334,9 @@ const DEADLINE_INSTANTS: [string, string, string][] = [
   ["2028-02-27T12:00:00.000Z", "2028-03-01", "08:00"],
   ["2026-11-08T10:00:00.000Z", "2026-11-09", "08:00"],
   ["2026-11-08T19:30:00.000Z", "2026-11-09", "08:00"],
+  // Less than 2 hours before the day before at 20:00, and exactly 2 hours.
+  ["2026-11-08T17:30:00.000Z", "2026-11-09", "08:00"],
+  ["2026-11-08T17:00:00.000Z", "2026-11-09", "08:00"],
   ["2026-11-08T10:00:00.000Z", "2026-11-08", "18:00"],
 ];
 const PUBLIC_URLS = [
@@ -394,6 +436,132 @@ const HUNTS = [
     response_deadline: "2027-02-01 08:00:00.000Z",
   },
 ];
+
+/** Webhook inputs and replies resolved against INBOUND_INVITATIONS. */
+const INBOUND_NOW = "2026-11-08T10:00:00.000Z";
+const INBOUND_NOW_S = Date.parse(INBOUND_NOW) / 1000;
+const INBOUND_TIMESTAMPS = [
+  String(INBOUND_NOW_S),
+  String(INBOUND_NOW_S - 301),
+  String(INBOUND_NOW_S + 300),
+  "",
+  "1e9",
+  " 1762596000",
+];
+const INBOUND_BODIES = [
+  JSON.stringify({
+    event: "sms:received",
+    id: "Ey6ECgOkVVFjz3CL48B8C",
+    payload: {
+      message: "Oui 👍 é",
+      sender: "+33639985001",
+      recipient: "+33639985099",
+    },
+  }),
+  JSON.stringify({
+    event: "sms:received",
+    id: "x".repeat(200),
+    payload: { message: "non", phoneNumber: "0639985001", recipient: null },
+  }),
+  JSON.stringify({ event: "sms:sent", id: "x" }),
+  JSON.stringify({ event: "sms:received", payload: { message: 1 } }),
+  "[]",
+  "{",
+  "",
+];
+const INBOUND_NUMBERS: [string, string[]][] = [
+  ["+33639985099", ["06 39 98 50 99"]],
+  ["+33639985001", ["+33639985099", ""]],
+  ["", [""]],
+  ["SFR", ["SFR"]],
+];
+const INBOUND_INVITATIONS = [
+  ["a", "2026-11-14", "2026-11-12 19:00:00.000Z", "invitations_sent"],
+  ["b", "2026-11-15", "2026-11-12 19:00:00.000Z", "invitations_sent"],
+  ["c", "2026-11-21", "2026-11-19 19:00:00.000Z", "cancelled"],
+  ["d", "2026-11-09", "2026-11-08 09:00:00.000Z", "invitations_sent"],
+  ["e", "2026-12-14", "", "invitations_sent"],
+  ["f", "2026-11-28", "", "closed"],
+  ["g", "2026-11-01", "", "invitations_sent"],
+  ["h", "2026-12-05", "", "draft"],
+].map(([id, date, response_deadline, status], i) => ({
+  id: String(id),
+  participation: i % 3 === 1 ? "present" : "pending",
+  hunt: {
+    date: String(date),
+    meeting_time: "08:00",
+    response_deadline: String(response_deadline),
+    status: String(status),
+  },
+}));
+const INBOUND_REPLIES = [
+  { answer: "yes" },
+  ...[1, 5, 9, 14, 15, 16, 21, 28].map((day) => ({ answer: "no", day })),
+] as { answer: "yes" | "no"; day?: number }[];
+
+/** Hunts for notification texts and reminders, at INBOUND_NOW. */
+const NOTIFIED_HUNT = {
+  date: "2027-08-15",
+  meeting_time: "23:30",
+  response_deadline: "2027-08-13 21:30:00.000Z",
+  status: "invitations_sent",
+  invitations_sent_at: "2026-11-06 10:00:00.000Z",
+  reminder_sent_at: "",
+};
+const CANCELLED_HUNT = {
+  date: "2026-11-01",
+  meeting_time: "07:05",
+  response_deadline: "",
+  status: "cancelled",
+  invitations_sent_at: "",
+  reminder_sent_at: "",
+};
+const NOTIFIED_HUNTS = [
+  {
+    date: "2026-11-14",
+    meeting_time: "08:00",
+    response_deadline: "2026-11-09 09:00:00.000Z",
+    status: "invitations_sent",
+    invitations_sent_at: "2026-11-06 10:00:00.000Z",
+    reminder_sent_at: "",
+  },
+  {
+    date: "2027-08-15",
+    meeting_time: "23:30",
+    response_deadline: "2027-08-13 21:30:00.000Z",
+    status: "invitations_sent",
+    invitations_sent_at: "2026-11-06 10:00:00.000Z",
+    reminder_sent_at: "",
+  },
+  {
+    date: "2026-11-01",
+    meeting_time: "07:05",
+    response_deadline: "",
+    status: "cancelled",
+    invitations_sent_at: "",
+    reminder_sent_at: "",
+  },
+];
+const PLANNED_ANSWERS = [
+  {
+    hunt: { ...NOTIFIED_HUNT, max_participants: 1 },
+    current: "pending",
+    others: ["present"],
+    answer: "yes",
+  },
+  {
+    hunt: { ...NOTIFIED_HUNT, max_participants: 0 },
+    current: "absent",
+    others: ["present", "waiting_list"],
+    answer: "yes",
+  },
+  {
+    hunt: { ...CANCELLED_HUNT, max_participants: 0 },
+    current: "pending",
+    others: [],
+    answer: "no",
+  },
+] as const;
 
 /** POSTs `body` to a test route of the JSVM instance. */
 async function inJsvm(url: string, route: string, body: unknown) {
@@ -602,7 +770,11 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
       config,
       base64: TRANSPORT_TEXTS.map((text) => transports.base64(text)),
       requests: TRANSPORT_TEXTS.map((text) =>
-        transports.gatewayRequest(config.sms, { to: "+33639981000", text }),
+        transports.gatewayRequest(config.sms, {
+          to: "+33639981000",
+          text,
+          id: "rem-abc",
+        }),
       ),
     });
   });
@@ -646,5 +818,59 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
         }),
       ),
     );
+  });
+
+  it("handles incoming SMS exactly like Node", async () => {
+    const at = new Date(INBOUND_NOW);
+
+    expect(
+      await inJsvm(pocketbase.url, "sms-inbound", {
+        now: INBOUND_NOW,
+        timestamps: INBOUND_TIMESTAMPS,
+        bodies: INBOUND_BODIES,
+        numbers: INBOUND_NUMBERS,
+        replies: INBOUND_REPLIES,
+        invitations: INBOUND_INVITATIONS,
+      }),
+    ).toStrictEqual({
+      timestamps: INBOUND_TIMESTAMPS.map((value) =>
+        smsInbound.timestampFresh(value, at),
+      ),
+      bodies: INBOUND_BODIES.map((raw) => smsInbound.parseWebhookEvent(raw)),
+      numbers: INBOUND_NUMBERS.map(([sender, own]) =>
+        smsInbound.isOwnNumber(sender, own),
+      ),
+      replies: INBOUND_REPLIES.map((reply) =>
+        smsInbound.resolveSmsReply(reply, INBOUND_INVITATIONS, at),
+      ),
+    });
+  });
+
+  it("renders notifications, reminders and retention exactly like Node", async () => {
+    const at = new Date(INBOUND_NOW);
+
+    expect(
+      await inJsvm(pocketbase.url, "notifications", {
+        hunts: NOTIFIED_HUNTS,
+        now: INBOUND_NOW,
+        answers: PLANNED_ANSWERS,
+      }),
+    ).toStrictEqual({
+      hunts: NOTIFIED_HUNTS.map((hunt) => ({
+        confirmations: (
+          ["present", "absent", "waiting_list", "cancelled"] as const
+        ).map((outcome) => notifications.confirmationSms(outcome, hunt)),
+        reminder: notifications.reminderMessages(
+          hunt,
+          "https://diane.example.org/r/abc",
+        ),
+        cancellation: notifications.cancellationMessages(hunt),
+        due: notifications.reminderDue(hunt, at),
+      })),
+      cutoffs: retention.purgeCutoffs(at),
+      answers: PLANNED_ANSWERS.map((input) =>
+        invitations.planAnswer(input, at),
+      ),
+    });
   });
 });

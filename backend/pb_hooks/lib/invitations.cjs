@@ -17,6 +17,7 @@ const {
   renderTemplate,
   renderSms,
 } = require("./message-template.cjs");
+const { participationAfterAnswer } = require("./waiting-list.cjs");
 
 /**
  * Default response deadline (CLAUDE.md), at a time easy to read in a
@@ -25,6 +26,11 @@ const {
  */
 const DEFAULT_DEADLINE_DAYS = 2;
 const DEFAULT_DEADLINE_TIME = "20:00";
+/**
+ * A default deadline leaves at least this delay to answer after the sending
+ * (user decision): otherwise the organizer sets the deadline.
+ */
+const MIN_DEFAULT_DEADLINE_DELAY_MS = 2 * 60 * 60 * 1000;
 
 /**
  * @typedef {object} Hunt
@@ -67,7 +73,8 @@ function addDays(day, days) {
  * times):
  * - the sending day + 2 days at 20:00, if strictly before the hunt starts
  *   (sent on Sunday 11:00 -> Tuesday 20:00);
- * - else the day before the hunt at 20:00, if still ahead;
+ * - else the day before the hunt at 20:00, if at least 2 hours ahead
+ *   (MIN_DEFAULT_DEADLINE_DELAY_MS);
  * - else none (null): the organizer must set one.
  *
  * @param {{ date: string, meeting_time: string }} hunt
@@ -82,7 +89,10 @@ function defaultDeadline(hunt, now) {
   );
   if (dayPlus2.getTime() < start) return toPocketBaseDate(dayPlus2);
   const dayBefore = parisToUtc(addDays(hunt.date, -1), DEFAULT_DEADLINE_TIME);
-  if (dayBefore.getTime() > now.getTime() && dayBefore.getTime() < start) {
+  if (
+    dayBefore.getTime() - now.getTime() >= MIN_DEFAULT_DEADLINE_DELAY_MS &&
+    dayBefore.getTime() < start
+  ) {
     return toPocketBaseDate(dayBefore);
   }
   return null;
@@ -152,7 +162,7 @@ function sendPlan(hunt, now) {
       ok: false,
       code: "deadline_missing",
       message:
-        "La battue est trop proche pour une date limite par défaut (la veille à 20h00 est passée) : fixez une date limite de réponse.",
+        "La battue est trop proche pour une date limite par défaut (la veille à 20h00 est passée ou dans moins de 2 h) : fixez une date limite de réponse.",
     };
   }
   return { ok: true, deadline: byDefault };
@@ -193,6 +203,39 @@ function isOpenInvitation(invitation, hunt, now) {
   return (
     invitation.participation === "pending" && answerRefusal(hunt, now) === null
   );
+}
+
+/**
+ * @typedef {{ ok: true, participation: string, changed: boolean }
+ *   | { ok: false, refusal: Refusal }} AnswerPlan
+ */
+
+/**
+ * Outcome of a member's answer, the same through the web link and by SMS:
+ * refused after the deadline or for a cancelled / closed hunt, else the
+ * participation after it (free place or waiting list). An unchanged
+ * answer (changed: false) keeps its time, i.e. its place in the waiting
+ * list.
+ *
+ * @param {object} input
+ * @param {Hunt & { max_participants: number }} input.hunt
+ * @param {string} input.current   Current participation of the member.
+ * @param {readonly string[]} input.others Participations of the other invitations.
+ * @param {"yes" | "no"} input.answer
+ * @param {Date} now
+ * @returns {AnswerPlan}
+ */
+function planAnswer({ hunt, current, others, answer }, now) {
+  const refusal = answerRefusal(hunt, now);
+  if (refusal) return { ok: false, refusal };
+  const participation = participationAfterAnswer({
+    current,
+    answer,
+    maxParticipants: hunt.max_participants,
+    presentCount: others.filter((p) => p === "present").length,
+    waitingCount: others.filter((p) => p === "waiting_list").length,
+  });
+  return { ok: true, participation, changed: participation !== current };
 }
 
 /** @type {Record<string, "yes" | "no" | null>} */
@@ -277,6 +320,7 @@ function channelsToResend(invitation, { huntSent, bootedAt, now }) {
   /** @param {string} status */
   const resend = (status) =>
     status === "failed" ||
+    status === "not_sent" ||
     (status === "sending" && abandoned) ||
     (status === "" && huntSent);
   return {
@@ -298,6 +342,7 @@ function sendSummary(results) {
     sent: results.filter((item) => item[field] === "sent").length,
     failed: results.filter((item) => item[field] === "failed").length,
     skipped: results.filter((item) => item[field] === "skipped").length,
+    not_sent: results.filter((item) => item[field] === "not_sent").length,
   });
   return {
     invited: results.length,
@@ -313,9 +358,11 @@ module.exports = {
   sendPlan,
   answerRefusal,
   isOpenInvitation,
+  planAnswer,
   publicAnswerView,
   invitationMessages,
   STALE_SENDING_MS,
+  MIN_DEFAULT_DEADLINE_DELAY_MS,
   channelsToResend,
   sendSummary,
 };

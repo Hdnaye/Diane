@@ -158,8 +158,8 @@ describe("send invitations", () => {
     expect(response.status).toBe(200);
     expect(response.body).toStrictEqual({
       invited: 3,
-      sms: { sent: 2, failed: 0, skipped: 1 },
-      email: { sent: 2, failed: 0, skipped: 1 },
+      sms: { sent: 2, failed: 0, skipped: 1, not_sent: 0 },
+      email: { sent: 2, failed: 0, skipped: 1, not_sent: 0 },
     });
 
     const invitations = await invitationsOf(hunt.id);

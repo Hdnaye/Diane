@@ -137,6 +137,8 @@ describe("resend failed invitations", () => {
       });
     }
     gateway.answerWith(202);
+    gateway.delayAnswers(0);
+    gateway.onRequest(null);
     await setSmtp(true);
   });
 
@@ -164,8 +166,8 @@ describe("resend failed invitations", () => {
     expect(response.status).toBe(200);
     expect(response.body).toStrictEqual({
       invited: 2,
-      sms: { sent: 2, failed: 0, skipped: 0 },
-      email: { sent: 1, failed: 0, skipped: 0 },
+      sms: { sent: 2, failed: 0, skipped: 0, not_sent: 0 },
+      email: { sent: 1, failed: 0, skipped: 0, not_sent: 0 },
     });
     expect(await invitationOf(hunt.id, both.id)).toMatchObject({
       sms_status: "sent",
@@ -199,8 +201,8 @@ describe("resend failed invitations", () => {
 
     expect(response.body).toStrictEqual({
       invited: 1,
-      sms: { sent: 0, failed: 0, skipped: 0 },
-      email: { sent: 1, failed: 0, skipped: 0 },
+      sms: { sent: 0, failed: 0, skipped: 0, not_sent: 0 },
+      email: { sent: 1, failed: 0, skipped: 0, not_sent: 0 },
     });
     expect(smsTo(member.phone as string)).toHaveLength(1);
     expect(mailsTo(member.email as string)).toHaveLength(1);
@@ -216,8 +218,8 @@ describe("resend failed invitations", () => {
     expect(response.status).toBe(200);
     expect(response.body).toStrictEqual({
       invited: 0,
-      sms: { sent: 0, failed: 0, skipped: 0 },
-      email: { sent: 0, failed: 0, skipped: 0 },
+      sms: { sent: 0, failed: 0, skipped: 0, not_sent: 0 },
+      email: { sent: 0, failed: 0, skipped: 0, not_sent: 0 },
     });
     expect(smsTo(member.phone as string)).toHaveLength(2);
     expect(mailsTo(member.email as string)).toHaveLength(1);
@@ -233,8 +235,8 @@ describe("resend failed invitations", () => {
 
       expect(response.body).toStrictEqual({
         invited: 1,
-        sms: { sent: 0, failed: 1, skipped: 0 },
-        email: { sent: 1, failed: 0, skipped: 0 },
+        sms: { sent: 0, failed: 1, skipped: 0, not_sent: 0 },
+        email: { sent: 1, failed: 0, skipped: 0, not_sent: 0 },
       });
     } finally {
       gateway.answerWith(202);
@@ -328,8 +330,8 @@ describe("resend failed invitations", () => {
 
     expect(response.body).toStrictEqual({
       invited: 1,
-      sms: { sent: 1, failed: 0, skipped: 0 },
-      email: { sent: 1, failed: 0, skipped: 0 },
+      sms: { sent: 1, failed: 0, skipped: 0, not_sent: 0 },
+      email: { sent: 1, failed: 0, skipped: 0, not_sent: 0 },
     });
     expect(await invitationOf(hunt.id, member.id)).toMatchObject({
       sms_status: "sent",
@@ -346,7 +348,12 @@ describe("resend failed invitations", () => {
 
     const response = await resend(hunt.id);
 
-    expect(response.body.sms).toStrictEqual({ sent: 1, failed: 0, skipped: 0 });
+    expect(response.body.sms).toStrictEqual({
+      sent: 1,
+      failed: 0,
+      skipped: 0,
+      not_sent: 0,
+    });
     expect(await invitationOf(hunt.id, member.id)).toMatchObject({
       sms_status: "sent",
       email_status: "sent",
@@ -377,4 +384,86 @@ describe("resend failed invitations", () => {
       email_status: "failed",
     });
   });
+
+  describe("long sendings", () => {
+    const ms = (value: string) => Date.parse(value.replace(" ", "T"));
+
+    it("refreshes a channel's sending just before sending it", async () => {
+      const first = await newMember({ email: "" });
+      const second = await newMember({ email: "" });
+      const hunt = await newHunt();
+      gateway.delayAnswers(1000);
+      let seen: ApiRecord | undefined;
+      gateway.onRequest(async (request) => {
+        if (JSON.stringify(request.body).includes(second.phone as string)) {
+          seen = await invitationOf(hunt.id, second.id);
+        }
+      });
+
+      const response = await send(hunt.id);
+
+      expect(response.body.sms.sent).toBe(2);
+      expect(smsTo(first.phone as string)).toHaveLength(1);
+      // While its SMS was being sent, the second invitation was `sending`,
+      // refreshed after the first SMS (1 s): never stale while in progress.
+      expect(seen?.sms_status).toBe("sending");
+      expect(
+        ms(seen?.updated as string) - ms(seen?.created as string),
+      ).toBeGreaterThanOrEqual(900);
+    });
+
+    it("does not send a channel taken over meanwhile", async () => {
+      const first = await newMember();
+      const second = await newMember();
+      const hunt = await newHunt();
+      gateway.delayAnswers(500);
+      gateway.onRequest(async (request) => {
+        if (JSON.stringify(request.body).includes(first.phone as string)) {
+          // As if resend-failed had taken it over (and failed).
+          await setStatuses(hunt.id, second.id, {
+            sms_status: "failed",
+            email_status: "failed",
+          });
+        }
+      });
+
+      const response = await send(hunt.id);
+
+      expect(response.status).toBe(200);
+      expect(smsTo(first.phone as string)).toHaveLength(1);
+      expect(smsTo(second.phone as string)).toHaveLength(0);
+      expect(mailsTo(second.email as string)).toHaveLength(0);
+      expect(await invitationOf(hunt.id, second.id)).toMatchObject({
+        sms_status: "failed",
+        email_status: "failed",
+      });
+    });
+  });
+
+  it("resends an invitation SMS that timed out without duplicate", async () => {
+    const member = await newMember({ email: "" });
+    const hunt = await newHunt();
+    gateway.delayAnswers(6000);
+    try {
+      await send(hunt.id);
+    } finally {
+      gateway.delayAnswers(0);
+    }
+    const invitation = await invitationOf(hunt.id, member.id);
+    expect(invitation.sms_status).toBe("failed");
+
+    const response = await resend(hunt.id);
+
+    expect(response.body.sms).toMatchObject({ sent: 1, failed: 0 });
+    expect(
+      smsTo(member.phone as string).map(
+        (request) => (request.body as { id: string }).id,
+      ),
+    ).toStrictEqual([`inv-${invitation.id}`, `inv-${invitation.id}`]);
+    expect(
+      gateway.accepted.filter((request) =>
+        JSON.stringify(request.body).includes(member.phone as string),
+      ),
+    ).toHaveLength(1);
+  }, 30_000);
 });

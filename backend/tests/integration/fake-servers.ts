@@ -12,22 +12,60 @@ export interface GatewayRequest {
   body: unknown;
 }
 
-/** HTTP server answering like SMS Gateway for Android, recording requests. */
+/**
+ * HTTP server answering like SMS Gateway for Android, recording requests.
+ * Like the real gateway, a message whose client-provided `id` was already
+ * accepted is rejected with 409 Conflict (MessagesService.kt).
+ */
 export async function startFakeGateway() {
   const requests: GatewayRequest[] = [];
+  /** Requests accepted (queued on the phone): the SMS really sent. */
+  const accepted: GatewayRequest[] = [];
+  const ids = new Set<string>();
   let status = 202;
+  let delayMs = 0;
+  let down = false;
+  const held = new Set<import("node:http").ServerResponse>();
+  let onRequest: ((request: GatewayRequest) => Promise<void>) | null = null;
   const server: Server = createHttpServer((request, response) => {
     let body = "";
     request.on("data", (chunk) => (body += chunk));
-    request.on("end", () => {
-      requests.push({
+    request.on("end", async () => {
+      const recorded = {
         method: request.method ?? "",
         url: request.url ?? "",
         authorization: request.headers.authorization ?? "",
         body: JSON.parse(body || "null"),
-      });
-      response.writeHead(status, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ id: "x", state: "Pending" }));
+      };
+      requests.push(recorded);
+      if (down) {
+        // Phone off or out of the network: never answers, sends nothing.
+        held.add(response);
+        return;
+      }
+      try {
+        await onRequest?.(recorded);
+      } catch {
+        // Assertions are checked by the test afterwards.
+      }
+      const id = (recorded.body as { id?: unknown } | null)?.id;
+      let answer = status;
+      if (typeof id === "string" && ids.has(id)) {
+        answer = 409;
+      } else if (status >= 200 && status < 300) {
+        // Queued on the phone now, even if the answer comes too late.
+        if (typeof id === "string") ids.add(id);
+        accepted.push(recorded);
+      }
+      if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+      response.writeHead(answer, { "Content-Type": "application/json" });
+      response.end(
+        JSON.stringify(
+          answer === 409
+            ? { message: "Message with the same ID already exists" }
+            : { id: "x", state: "Pending" },
+        ),
+      );
     });
   });
   const port = await freePort();
@@ -37,10 +75,31 @@ export async function startFakeGateway() {
   return {
     url: `http://127.0.0.1:${port}`,
     requests,
+    accepted,
+    /** Phone unreachable (never answers) or back. */
+    setDown(value: boolean) {
+      down = value;
+      if (!value) {
+        for (const response of held) response.destroy();
+        held.clear();
+      }
+    },
     answerWith(code: number) {
       status = code;
     },
-    stop: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    /** Answers each request after `ms` milliseconds (slow phone). */
+    delayAnswers(ms: number) {
+      delayMs = ms;
+    },
+    /** Runs `callback` on each request, before answering it. */
+    onRequest(callback: ((request: GatewayRequest) => Promise<void>) | null) {
+      onRequest = callback;
+    },
+    stop: () =>
+      new Promise<void>((resolve) => {
+        for (const response of held) response.destroy();
+        server.close(() => resolve());
+      }),
   };
 }
 
