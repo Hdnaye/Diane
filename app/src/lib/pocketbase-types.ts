@@ -136,6 +136,7 @@ export type InvitationsAnsweredViaOptions =
   (typeof InvitationsAnsweredViaOptions)[keyof typeof InvitationsAnsweredViaOptions];
 
 export const InvitationsSmsStatusOptions = {
+  sending: 'sending',
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',
@@ -144,6 +145,7 @@ export type InvitationsSmsStatusOptions =
   (typeof InvitationsSmsStatusOptions)[keyof typeof InvitationsSmsStatusOptions];
 
 export const InvitationsEmailStatusOptions = {
+  sending: 'sending',
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',

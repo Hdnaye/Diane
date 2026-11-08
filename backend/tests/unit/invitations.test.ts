@@ -4,12 +4,15 @@ import { describe, expect, it } from "vitest";
 const require = createRequire(import.meta.url);
 const {
   answerLink,
+  defaultDeadline,
   sendPlan,
   answerRefusal,
   isOpenInvitation,
   publicAnswerView,
   invitationMessages,
   sendSummary,
+  channelsToResend,
+  STALE_SENDING_MS,
   toPocketBaseDate,
 } =
   require("../../pb_hooks/lib/invitations.cjs") as typeof import("../../pb_hooks/lib/invitations.cjs");
@@ -50,6 +53,88 @@ describe("answerLink", () => {
   );
 });
 
+describe("defaultDeadline", () => {
+  /** A hunt far enough for the day + 2 rule. */
+  const FAR = { date: "2027-06-01", meeting_time: "08:00" };
+
+  it.each([
+    // Sunday 11:00 Paris (CET) -> Tuesday 20:00 Paris.
+    ["2026-11-08T10:00:00.000Z", "2026-11-10 19:00:00.000Z"],
+    // Just after midnight in Paris (still the previous day in UTC): day + 2
+    // counts from the Paris day.
+    ["2026-11-08T23:30:00.000Z", "2026-11-11 19:00:00.000Z"],
+    // Just before midnight in Paris.
+    ["2026-11-08T22:59:00.000Z", "2026-11-10 19:00:00.000Z"],
+    // Summer time (CEST, UTC+2).
+    ["2026-07-14T08:00:00.000Z", "2026-07-16 18:00:00.000Z"],
+    // Friday in winter time, deadline on Sunday after the switch to summer time.
+    ["2026-03-27T12:00:00.000Z", "2026-03-29 18:00:00.000Z"],
+    // Across a month and a year.
+    ["2026-12-30T15:00:00.000Z", "2027-01-01 19:00:00.000Z"],
+  ])("from %s is day + 2 at 20:00 Paris: %s", (now, expected) => {
+    expect(defaultDeadline(FAR, new Date(now))).toBe(expected);
+  });
+
+  // Sent on Sunday 2026-11-08 at 11:00 Paris (NOW).
+  it.each([
+    // In 3 days: day + 2 (Tuesday 20:00) is before the hunt.
+    ["2026-11-11", "08:00", "2026-11-10 19:00:00.000Z"],
+    // Day + 2 at 20:01: day + 2 at 20:00 is strictly before.
+    ["2026-11-10", "20:01", "2026-11-10 19:00:00.000Z"],
+    // Day + 2 at 20:00 (not strictly before) or early morning: the day
+    // before at 20:00.
+    ["2026-11-10", "20:00", "2026-11-09 19:00:00.000Z"],
+    ["2026-11-10", "06:30", "2026-11-09 19:00:00.000Z"],
+    // Tomorrow: this evening at 20:00.
+    ["2026-11-09", "08:00", "2026-11-08 19:00:00.000Z"],
+  ])("for a hunt on %s at %s is %s", (date, meeting_time, expected) => {
+    expect(defaultDeadline({ date, meeting_time }, NOW)).toBe(expected);
+  });
+
+  it.each([
+    // Today: the day before at 20:00 has passed.
+    ["2026-11-08T10:00:00.000Z", "2026-11-08", "18:00"],
+    // Tomorrow, sent after 20:00 Paris (or exactly at 20:00).
+    ["2026-11-08T19:30:00.000Z", "2026-11-09", "08:00"],
+    ["2026-11-08T19:00:00.000Z", "2026-11-09", "08:00"],
+  ])("from %s for a hunt on %s at %s is none", (now, date, meeting_time) => {
+    expect(defaultDeadline({ date, meeting_time }, new Date(now))).toBeNull();
+  });
+
+  it.each([
+    // Friday in summer time; hunt on the Sunday of the switch to winter
+    // time: the day before (Saturday, CEST) at 20:00.
+    [
+      "2026-10-23T10:00:00.000Z",
+      "2026-10-25",
+      "08:00",
+      "2026-10-24 18:00:00.000Z",
+    ],
+    // Friday in winter time; hunt on the Sunday of the switch to summer
+    // time: the day before (Saturday, CET) at 20:00.
+    [
+      "2026-03-27T12:00:00.000Z",
+      "2026-03-29",
+      "08:00",
+      "2026-03-28 19:00:00.000Z",
+    ],
+    // Day + 2 falls after the switch to winter time (CET).
+    [
+      "2026-10-23T10:00:00.000Z",
+      "2026-10-26",
+      "08:00",
+      "2026-10-25 19:00:00.000Z",
+    ],
+  ])(
+    "across a daylight saving switch (from %s, hunt %s %s) is %s",
+    (now, date, meeting_time, expected) => {
+      expect(defaultDeadline({ date, meeting_time }, new Date(now))).toBe(
+        expected,
+      );
+    },
+  );
+});
+
 describe("sendPlan", () => {
   it("accepts a hunt whose deadline is ahead, deadline unchanged", () => {
     expect(sendPlan(hunt(), NOW)).toStrictEqual({ ok: true, deadline: null });
@@ -75,18 +160,48 @@ describe("sendPlan", () => {
     ).toMatchObject({ ok: false, code: "deadline_passed" });
   });
 
-  it("sets the default deadline (48 h) when there is none", () => {
+  it("sets the default deadline (day + 2, 20:00 Paris) when there is none", () => {
+    // Sunday 2026-11-08 11:00 Paris -> Tuesday 2026-11-10 20:00 Paris (CET).
     expect(sendPlan(hunt({ response_deadline: "" }), NOW)).toStrictEqual({
       ok: true,
-      deadline: "2026-11-10 10:00:00.000Z",
+      deadline: "2026-11-10 19:00:00.000Z",
     });
   });
 
-  it("refuses without deadline when the hunt starts within 48 h", () => {
-    // 2026-11-10 08:00 Paris = 07:00 UTC, before now + 48 h.
+  it("sets the day before at 20:00 when day + 2 is too late", () => {
     expect(
       sendPlan(hunt({ date: "2026-11-10", response_deadline: "" }), NOW),
-    ).toMatchObject({ ok: false, code: "deadline_missing" });
+    ).toStrictEqual({ ok: true, deadline: "2026-11-09 19:00:00.000Z" });
+  });
+
+  it("refuses without deadline when the day before at 20:00 has passed", () => {
+    expect(
+      sendPlan(
+        hunt({
+          date: "2026-11-08",
+          meeting_time: "18:00",
+          response_deadline: "",
+        }),
+        NOW,
+      ),
+    ).toMatchObject({
+      ok: false,
+      code: "deadline_missing",
+      message: expect.stringMatching(/date limite/),
+    });
+  });
+
+  it("accepts without deadline a hunt starting after day + 2, 20:00", () => {
+    expect(
+      sendPlan(
+        hunt({
+          date: "2026-11-10",
+          meeting_time: "20:01",
+          response_deadline: "",
+        }),
+        NOW,
+      ),
+    ).toStrictEqual({ ok: true, deadline: "2026-11-10 19:00:00.000Z" });
   });
 
   it("gives a French message with each refusal", () => {
@@ -206,6 +321,72 @@ describe("invitationMessages", () => {
     expect(
       invitationMessages({ body, hunt: hunt(), link: "L", several: true }).sms,
     ).toBe("Battue le samedi 14 novembre. OUI 14 L");
+  });
+});
+
+describe("channelsToResend", () => {
+  // Booted at 09:00, now 10:00.
+  const context = {
+    huntSent: true,
+    bootedAt: new Date("2026-11-08T09:00:00.000Z"),
+    now: NOW,
+  };
+  const invitation = (
+    sms_status: string,
+    email_status: string,
+    updated = "2026-11-08 09:59:00.000Z",
+  ) => ({ sms_status, email_status, updated });
+
+  it("resends failed channels only", () => {
+    expect(
+      channelsToResend(invitation("failed", "sent"), context),
+    ).toStrictEqual({ sms: true, email: false });
+    expect(
+      channelsToResend(invitation("skipped", "failed"), context),
+    ).toStrictEqual({ sms: false, email: true });
+  });
+
+  it("leaves a sending in progress alone", () => {
+    expect(
+      channelsToResend(invitation("sending", "sending"), context),
+    ).toStrictEqual({ sms: false, email: false });
+  });
+
+  it(`takes over a sending older than ${STALE_SENDING_MS / 60000} minutes`, () => {
+    const at = (ms: number) =>
+      new Date(NOW.getTime() - ms).toISOString().replace("T", " ");
+
+    expect(
+      channelsToResend(
+        invitation("sending", "sent", at(STALE_SENDING_MS)),
+        context,
+      ),
+    ).toStrictEqual({ sms: true, email: false });
+    expect(
+      channelsToResend(
+        invitation("sending", "sent", at(STALE_SENDING_MS - 1000)),
+        context,
+      ),
+    ).toStrictEqual({ sms: false, email: false });
+  });
+
+  it("takes over a sending interrupted by a restart", () => {
+    expect(
+      channelsToResend(
+        invitation("sending", "sending", "2026-11-08 08:59:59.000Z"),
+        context,
+      ),
+    ).toStrictEqual({ sms: true, email: true });
+  });
+
+  it("sends channels never sent of a hunt already sent", () => {
+    expect(channelsToResend(invitation("", "sent"), context)).toStrictEqual({
+      sms: true,
+      email: false,
+    });
+    expect(
+      channelsToResend(invitation("", ""), { ...context, huntSent: false }),
+    ).toStrictEqual({ sms: false, email: false });
   });
 });
 
