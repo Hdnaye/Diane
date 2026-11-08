@@ -405,6 +405,7 @@ describe("deliver", () => {
     expect(deliver(ok, { to: "", text: "x" })).toStrictEqual({
       status: "skipped",
       error: "",
+      kind: "",
     });
   });
 
@@ -412,6 +413,7 @@ describe("deliver", () => {
     expect(deliver(ok, { to: PHONE, text: "x" })).toStrictEqual({
       status: "sent",
       error: "",
+      kind: "",
     });
   });
 
@@ -419,6 +421,79 @@ describe("deliver", () => {
     expect(deliver(failing, { to: PHONE, text: "x" })).toStrictEqual({
       status: "failed",
       error: "SMS gateway answered HTTP 500",
+      kind: "failed",
     });
+  });
+
+  /** Kind of failure of the first SMS sent through `httpSend`. */
+  const kindOf = (
+    httpSend: () => { statusCode: number },
+    sms: Partial<Config["sms"]> = {},
+  ) => {
+    const transports = createTransports(
+      gatewayConfig(sms),
+      fakeIo({ httpSend }).io,
+    );
+    return [
+      deliver(transports.sms, { to: PHONE, text: "x" }).kind,
+      deliver(transports.sms, { to: "+33639981001", text: "y" }).kind,
+    ];
+  };
+
+  it("tells a timeout (the SMS may have been sent) from a failure", () => {
+    const timeout = () => {
+      throw new Error(
+        'Post "http://192.168.1.50:8080/messages": context deadline exceeded (Client.Timeout exceeded while awaiting headers)',
+      );
+    };
+    // The next SMS of the sending are not attempted (gateway unreachable).
+    expect(kindOf(timeout)).toStrictEqual(["timeout", "not_attempted"]);
+  });
+
+  it("reports a connection that could not be made as a failure (not sent)", () => {
+    for (const message of [
+      "dial tcp 192.168.1.50:8080: connect: connection refused",
+      "dial tcp 10.255.255.1:8080: i/o timeout",
+      "dial tcp: lookup gateway.invalid: no such host",
+    ]) {
+      expect(
+        kindOf(() => {
+          throw new Error(message);
+        }),
+      ).toStrictEqual(["failed", "not_attempted"]);
+    }
+  });
+
+  it("reports an HTTP error answer as a failure", () => {
+    expect(kindOf(() => ({ statusCode: 503 }))).toStrictEqual([
+      "failed",
+      "failed",
+    ]);
+  });
+
+  it("reports a gateway not configured as not attempted", () => {
+    expect(kindOf(() => ({ statusCode: 202 }), { url: "" })).toStrictEqual([
+      "not_attempted",
+      "not_attempted",
+    ]);
+  });
+
+  it("reports SMTP not configured as not attempted, an SMTP error as a failure", () => {
+    const disabled = createTransports(
+      gatewayConfig(),
+      fakeIo({ smtpEnabled: false }).io,
+    );
+    const broken = createTransports(
+      gatewayConfig(),
+      fakeIo({
+        mailSend: () => {
+          throw new Error("535 auth failed");
+        },
+      }).io,
+    );
+    const message = { to: EMAIL, subject: "s", text: "t" };
+
+    expect(deliver(disabled.email, message).kind).toBe("not_attempted");
+    expect(deliver(broken.email, message).kind).toBe("failed");
   });
 });

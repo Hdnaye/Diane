@@ -484,8 +484,9 @@ const INBOUND_INVITATIONS = [
   ["f", "2026-11-28", "", "closed"],
   ["g", "2026-11-01", "", "invitations_sent"],
   ["h", "2026-12-05", "", "draft"],
-].map(([id, date, response_deadline, status]) => ({
+].map(([id, date, response_deadline, status], i) => ({
   id: String(id),
+  participation: i % 3 === 1 ? "present" : "pending",
   hunt: {
     date: String(date),
     meeting_time: "08:00",

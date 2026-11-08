@@ -8,6 +8,10 @@ const {
   cancellationMessages,
   reminderDue,
   REMINDER_BEFORE_DEADLINE_MS,
+  MAX_NOTICE_ATTEMPTS,
+  noticeChannelsToSend,
+  noticeRecord,
+  sendingOrder,
 } =
   require("../../pb_hooks/lib/notifications.cjs") as typeof import("../../pb_hooks/lib/notifications.cjs");
 const { smsSegments } =
@@ -35,19 +39,19 @@ const LONGEST_HUNTS = Array.from({ length: 366 }, (_, i) => {
 describe("confirmationSms", () => {
   it("confirms a yes with the hunt's day and the deadline to change it", () => {
     expect(confirmationSms("present", HUNT)).toBe(
-      "Présence OUI enregistrée pour la battue du samedi 14 novembre. Modifiable jusqu'au jeudi 12 novembre à 20h00.",
+      "Présence OUI enregistrée pour la battue du samedi 14 novembre. Pour changer, renvoyez OUI 14 ou NON 14 avant le jeudi 12 novembre à 20h00.",
     );
   });
 
   it("confirms a no", () => {
     expect(confirmationSms("absent", HUNT)).toBe(
-      "Absence enregistrée pour la battue du samedi 14 novembre. Modifiable jusqu'au jeudi 12 novembre à 20h00.",
+      "Absence enregistrée pour la battue du samedi 14 novembre. Pour changer, renvoyez OUI 14 ou NON 14 avant le jeudi 12 novembre à 20h00.",
     );
   });
 
   it("tells about the waiting list", () => {
     expect(confirmationSms("waiting_list", HUNT)).toBe(
-      "Vous etes sur liste d'attente pour la battue du samedi 14 novembre. Modifiable jusqu'au jeudi 12 novembre à 20h00.",
+      "Vous etes sur liste d'attente pour la battue du samedi 14 novembre. Pour changer, renvoyez OUI 14 ou NON 14 avant le jeudi 12 novembre à 20h00.",
     );
   });
 
@@ -57,9 +61,9 @@ describe("confirmationSms", () => {
     );
   });
 
-  it("leaves the deadline out without one", () => {
+  it("tells how to change it without a deadline", () => {
     expect(confirmationSms("present", { ...HUNT, response_deadline: "" })).toBe(
-      "Présence OUI enregistrée pour la battue du samedi 14 novembre.",
+      "Présence OUI enregistrée pour la battue du samedi 14 novembre. Pour changer, renvoyez OUI 14 ou NON 14.",
     );
   });
 
@@ -67,7 +71,7 @@ describe("confirmationSms", () => {
     expect(
       confirmationSms("waiting_list", { ...HUNT, date: "2026-08-15" }),
     ).toBe(
-      "Vous etes sur liste d'attente pour la battue du samedi 15 aout. Modifiable jusqu'au jeudi 12 novembre à 20h00.",
+      "Vous etes sur liste d'attente pour la battue du samedi 15 aout. Pour changer, renvoyez OUI 15 ou NON 15 avant le jeudi 12 novembre à 20h00.",
     );
     for (const hunt of LONGEST_HUNTS) {
       for (const outcome of [
@@ -92,7 +96,7 @@ describe("reminderMessages", () => {
 
   it("reminds by SMS with the day to answer, without the link", () => {
     expect(reminderMessages(HUNT, link).sms).toBe(
-      "Rappel : battue du samedi 14 novembre à 8h00. Répondez par SMS OUI 14 ou NON 14 avant le jeudi 12 novembre à 20h00.",
+      "Rappel : battue du samedi 14 novembre à 8h00. Vous n'avez pas encore répondu. Répondez par SMS OUI 14 ou NON 14 avant le jeudi 12 novembre à 20h00.",
     );
   });
 
@@ -187,5 +191,96 @@ describe("reminderDue", () => {
       due({ invitations_sent_at: "2026-11-11 20:00:00.000Z" }, at(-3600_000)),
     ).toBe(false);
     expect(due({ invitations_sent_at: "" }, at(-3600_000))).toBe(false);
+  });
+});
+
+describe("noticeChannelsToSend", () => {
+  const NOW = new Date("2026-11-08T10:00:00.000Z");
+  const context = { huntSent: false, bootedAt: null, now: NOW };
+  const notice = (fields: Record<string, unknown>) => ({
+    sms_status: "",
+    email_status: "",
+    sms_attempts: 0,
+    email_attempts: 0,
+    updated: "2026-11-08 09:59:00.000Z",
+    ...fields,
+  });
+
+  it(`resends a failed notice up to ${3} attempts`, () => {
+    expect(MAX_NOTICE_ATTEMPTS).toBe(3);
+    expect(
+      noticeChannelsToSend(
+        notice({ sms_status: "failed", sms_attempts: 2 }),
+        context,
+      ),
+    ).toStrictEqual({ sms: true, email: false });
+    expect(
+      noticeChannelsToSend(
+        notice({ sms_status: "failed", sms_attempts: 3 }),
+        context,
+      ),
+    ).toStrictEqual({ sms: false, email: false });
+  });
+
+  it("never resends a notice that may have been sent (timeout)", () => {
+    expect(
+      noticeChannelsToSend(
+        notice({ sms_status: "unknown", email_status: "unknown" }),
+        { ...context, huntSent: true },
+      ),
+    ).toStrictEqual({ sms: false, email: false });
+  });
+
+  it("sends a notice never sent when asked to", () => {
+    expect(
+      noticeChannelsToSend(notice({}), { ...context, huntSent: true }),
+    ).toStrictEqual({ sms: true, email: true });
+  });
+});
+
+describe("noticeRecord", () => {
+  it("records a timeout as unknown (may have been sent), one attempt", () => {
+    expect(
+      noticeRecord({ status: "failed", kind: "timeout" }, 0),
+    ).toStrictEqual({ status: "unknown", attempts: 1 });
+  });
+
+  it("counts an attempted failure, not a message never attempted", () => {
+    expect(noticeRecord({ status: "failed", kind: "failed" }, 1)).toStrictEqual(
+      { status: "failed", attempts: 2 },
+    );
+    expect(
+      noticeRecord({ status: "failed", kind: "not_attempted" }, 1),
+    ).toStrictEqual({ status: "failed", attempts: 1 });
+  });
+
+  it("counts a sent message, not a skipped one", () => {
+    expect(noticeRecord({ status: "sent", kind: "" }, 0)).toStrictEqual({
+      status: "sent",
+      attempts: 1,
+    });
+    expect(noticeRecord({ status: "skipped", kind: "" }, 0)).toStrictEqual({
+      status: "skipped",
+      attempts: 0,
+    });
+  });
+});
+
+describe("sendingOrder", () => {
+  it("tries the least attempted first, in a random order otherwise", () => {
+    const items = [
+      { id: "a", attempts: 2 },
+      { id: "b", attempts: 0 },
+      { id: "c", attempts: 1 },
+      { id: "d", attempts: 0 },
+    ];
+    const seen = new Set<string>();
+    for (let i = 0; i < 50; i++) {
+      const order = sendingOrder(items).map((item) => item.id);
+      expect(order.slice(2)).toStrictEqual(["c", "a"]);
+      seen.add(order.slice(0, 2).join(""));
+    }
+    expect(seen).toStrictEqual(new Set(["bd", "db"]));
+    expect(items.map((item) => item.id)).toStrictEqual(["a", "b", "c", "d"]);
   });
 });

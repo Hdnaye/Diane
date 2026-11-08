@@ -2,8 +2,10 @@
 // members who have not answered get a short SMS / e-mail, once. Triggered
 // through PocketBase's cron API (superuser), which runs the job in the
 // background: tests wait for its effects.
+import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { phoneNumbers, recordsPath, uniqueEmail } from "./api.js";
+import { startFakeGateway } from "./fake-servers.js";
 import {
   startTestInstance,
   TEST_PUBLIC_URL,
@@ -143,7 +145,7 @@ describe("reminders", () => {
     const sms = messages.find((message) => message.kind === "sms");
     expect(sms?.text).toMatch(
       new RegExp(
-        `^Rappel : battue du .+ à 8h00\\. Répondez par SMS OUI ${day} ou NON ${day} avant le .+\\.$`,
+        `^Rappel : battue du .+ à 8h00\\. Vous n'avez pas encore répondu\\. Répondez par SMS OUI ${day} ou NON ${day} avant le .+\\.$`,
       ),
     );
     const email = messages.find((message) => message.kind === "email");
@@ -225,5 +227,161 @@ describe("reminders", () => {
     await sleep(1500);
 
     expect(await messagesTo(member)).toHaveLength(2);
+  });
+});
+
+describe("automatic retries against a real (fake) gateway", () => {
+  let pb: TestInstance;
+  let gateway: Awaited<ReturnType<typeof startFakeGateway>>;
+
+  beforeAll(async () => {
+    gateway = await startFakeGateway();
+    pb = await startTestInstance({
+      env: {
+        DIANE_SMS_TRANSPORT: "",
+        DIANE_SMS_GATEWAY_URL: gateway.url,
+        DIANE_SMS_GATEWAY_USERNAME: "sms",
+        DIANE_SMS_GATEWAY_PASSWORD: randomBytes(16).toString("hex"),
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await pb?.stop();
+    await gateway?.stop();
+  });
+
+  async function create(collection: string, body: Record<string, unknown>) {
+    const response = await pb.api(recordsPath(collection), {
+      method: "POST",
+      token: pb.organizerToken,
+      body,
+    });
+    if (response.status !== 200) {
+      throw new Error(
+        `Setup failed: HTTP ${response.status} ${JSON.stringify(response.body)}`,
+      );
+    }
+    return response.body as ApiRecord;
+  }
+
+  /** A hunt due for its reminder with `count` pending members (no e-mail). */
+  async function dueHunt(count: number) {
+    const hunt = await create("hunts", {
+      date: nextDay(),
+      meeting_time: "08:00",
+      response_deadline: fromNow(23 * HOUR),
+      status: "invitations_sent",
+      invitations_sent_at: fromNow(-48 * HOUR),
+    });
+    const invitations: ApiRecord[] = [];
+    const members: ApiRecord[] = [];
+    for (let i = 0; i < count; i++) {
+      const member = await create("members", {
+        name: "Marie Roux",
+        phone: nextPhone(),
+      });
+      members.push(member);
+      invitations.push(
+        await create("invitations", { hunt: hunt.id, member: member.id }),
+      );
+    }
+    return { hunt, members, invitations };
+  }
+
+  const smsTo = (member: ApiRecord) =>
+    gateway.requests.filter((request) =>
+      JSON.stringify(request.body).includes(member.phone),
+    ).length;
+
+  const statuses = async (invitations: ApiRecord[]) =>
+    Promise.all(
+      invitations.map(async (invitation) => {
+        const body = (
+          await pb.api(recordsPath("invitations", invitation.id), {
+            token: pb.organizerToken,
+          })
+        ).body;
+        return {
+          status: body.reminder_sms_status as string,
+          attempts: body.reminder_sms_attempts as number,
+        };
+      }),
+    );
+
+  /** Runs the reminder cron and waits until no reminder is `sending`. */
+  async function runAndSettle(invitations: ApiRecord[]) {
+    const response = await pb.api("/api/crons/dianeReminders", {
+      method: "POST",
+      token: pb.superuserToken,
+    });
+    expect(response.status).toBe(204);
+    await sleep(300);
+    for (let i = 0; i < 200; i++) {
+      const current = await statuses(invitations);
+      if (current.every((item) => item.status !== "sending")) return current;
+      await sleep(100);
+    }
+    throw new Error("Reminders still sending");
+  }
+
+  it("never resends a reminder that timed out (it may have been sent), and reaches everybody", async () => {
+    const { members, invitations } = await dueHunt(3);
+    // The phone accepts each SMS, but after the 5 s timeout.
+    gateway.delayAnswers(6000);
+    try {
+      for (let run = 0; run < 4; run++) await runAndSettle(invitations);
+    } finally {
+      gateway.delayAnswers(0);
+    }
+
+    // Each member got exactly one reminder: the one that timed out is
+    // never retried, the ones cut off (gateway unreachable) come first
+    // on the next run.
+    expect(members.map(smsTo)).toStrictEqual([1, 1, 1]);
+    expect(await statuses(invitations)).toStrictEqual(
+      Array(3).fill({ status: "unknown", attempts: 1 }),
+    );
+  }, 90_000);
+
+  it("retries a failed reminder at most 3 times", async () => {
+    const { members, invitations } = await dueHunt(2);
+    gateway.answerWith(503);
+    try {
+      for (let run = 0; run < 5; run++) await runAndSettle(invitations);
+    } finally {
+      gateway.answerWith(202);
+    }
+
+    expect(members.map(smsTo)).toStrictEqual([3, 3]);
+    expect(await statuses(invitations)).toStrictEqual(
+      Array(2).fill({ status: "failed", attempts: 3 }),
+    );
+  }, 30_000);
+
+  it("caps the cancellation notices the same way", async () => {
+    const { hunt, members, invitations } = await dueHunt(1);
+    const cancel = () =>
+      pb.api(`/api/diane/hunts/${hunt.id}/cancel`, {
+        method: "POST",
+        token: pb.organizerToken,
+      });
+    gateway.answerWith(503);
+    try {
+      for (let call = 0; call < 5; call++) await cancel();
+    } finally {
+      gateway.answerWith(202);
+    }
+
+    expect(smsTo(members[0] as ApiRecord)).toBe(3);
+    const body = (
+      await pb.api(recordsPath("invitations", invitations[0]?.id ?? ""), {
+        token: pb.organizerToken,
+      })
+    ).body;
+    expect(body).toMatchObject({
+      cancellation_sms_status: "failed",
+      cancellation_sms_attempts: 3,
+    });
   });
 });

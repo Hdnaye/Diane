@@ -162,6 +162,32 @@ describe("incoming SMS webhook", () => {
       expect(await queued(member.phone)).toHaveLength(0);
     });
 
+    it("logs the clock skew (seconds) when only the timestamp fails", async () => {
+      const member = await newMember();
+      const response = await postWebhook(
+        pb.process.url,
+        receivedEvent(member.phone, "OUI"),
+        { timestamp: String(Math.floor(Date.now() / 1000) - 1000) },
+      );
+      expect(response.status).toBe(401);
+
+      let logs: { message: string; data: Record<string, unknown> }[] = [];
+      for (let i = 0; i < 100 && logs.length === 0; i++) {
+        const found = await pb.api(
+          `/api/logs?filter=${encodeURIComponent("message~'clock skew'")}`,
+          { token: pb.superuserToken },
+        );
+        logs = found.body.items;
+        if (logs.length === 0) await new Promise((r) => setTimeout(r, 100));
+      }
+
+      expect(logs).toHaveLength(1);
+      const skew = Number(logs[0]?.data.skew_s);
+      expect(skew).toBeGreaterThanOrEqual(995);
+      expect(skew).toBeLessThanOrEqual(1005);
+      expect(JSON.stringify(logs)).not.toContain(member.phone);
+    }, 20_000);
+
     it("refuses a malformed body once authenticated", async () => {
       expect((await postWebhook(pb.process.url, "{oops")).status).toBe(400);
     });
@@ -195,7 +221,7 @@ describe("incoming SMS webhook", () => {
       const sms = await newSms(member.phone);
       expect(sms).toHaveLength(1);
       expect(sms[0]?.text).toMatch(
-        /^Présence OUI enregistrée pour la battue du \w+ \d+(er)? \w+\. Modifiable jusqu'au /,
+        /^Présence OUI enregistrée pour la battue du \w+ \d+(er)? \w+\. Pour changer, renvoyez OUI \d+ ou NON \d+ avant le /,
       );
     });
 

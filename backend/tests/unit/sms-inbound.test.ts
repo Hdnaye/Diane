@@ -139,8 +139,12 @@ describe("resolveSmsReply", () => {
     status: "invitations_sent",
     ...fields,
   });
-  const invitation = (id: string, fields: Record<string, string> = {}) => ({
+  const invitation = (
+    id: string,
+    { participation = "pending", ...fields }: Record<string, string> = {},
+  ) => ({
     id,
+    participation,
     hunt: hunt(fields),
   });
 
@@ -160,6 +164,7 @@ describe("resolveSmsReply", () => {
             invitation("late", {
               date: "2026-11-09",
               response_deadline: "2026-11-08 09:00:00.000Z",
+              participation: "absent",
             }),
             invitation("draft", { date: "2026-11-21", status: "draft" }),
             invitation("b", { date: "2026-11-15" }),
@@ -167,6 +172,24 @@ describe("resolveSmsReply", () => {
           NOW,
         ),
       ).toStrictEqual({ action: "apply", invitationId: "b", answer: "no" });
+    });
+
+    it("sends it to review when another upcoming hunt still waits for an answer", () => {
+      // A late "OUI" for tomorrow's hunt (deadline passed) must not be
+      // applied to next week's: in doubt, to check.
+      expect(
+        resolveSmsReply(
+          { answer: "yes" },
+          [
+            invitation("late", {
+              date: "2026-11-09",
+              response_deadline: "2026-11-08 09:00:00.000Z",
+            }),
+            invitation("b", { date: "2026-11-15" }),
+          ],
+          NOW,
+        ),
+      ).toStrictEqual({ action: "review", reason: "ambiguous" });
     });
 
     it("sends several open invitations to review", () => {
