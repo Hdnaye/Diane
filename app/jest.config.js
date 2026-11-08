@@ -12,6 +12,8 @@ module.exports = {
     // The "react-native" entry of lucide is an .mjs file Jest cannot load: use its CommonJS build.
     '^lucide-react-native$':
       '<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js',
+    // The PocketBase SDK's main entry is an ES module: use its CommonJS build.
+    '^pocketbase$': '<rootDir>/node_modules/pocketbase/dist/pocketbase.cjs.js',
   },
   // jest-expo's defaults, plus the untranspiled packages used by reusables, NativeWind and lucide.
   transformIgnorePatterns: [
