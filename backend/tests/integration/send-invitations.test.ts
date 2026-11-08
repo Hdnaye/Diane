@@ -24,6 +24,15 @@ const nextPhone = phoneNumbers(40);
 const nextDay = huntDays(2110);
 const DEADLINE = "2109-12-01 17:00:00.000Z";
 
+/** A record as returned by the API (the fields read by these tests). */
+type ApiRecord = Record<string, string> & {
+  id: string;
+  token: string;
+  phone: string;
+  email: string;
+  date: string;
+};
+
 describe("send invitations", () => {
   let pb: TestInstance;
 
@@ -38,7 +47,7 @@ describe("send invitations", () => {
   async function create(
     collection: string,
     body: Record<string, unknown>,
-  ): Promise<Record<string, string>> {
+  ): Promise<ApiRecord> {
     const response = await pb.api(recordsPath(collection), {
       method: "POST",
       token: pb.organizerToken,
@@ -72,7 +81,7 @@ describe("send invitations", () => {
       `${recordsPath("invitations")}?perPage=500&filter=${encodeURIComponent(`hunt="${huntId}"`)}`,
       { token: pb.organizerToken },
     );
-    return response.body.items as Record<string, string>[];
+    return response.body.items as ApiRecord[];
   }
 
   /** Deactivates every member, so that each test chooses who is invited. */
@@ -279,7 +288,7 @@ describe("send invitations", () => {
     const response = await send(hunt.id);
 
     expect(response.status).toBe(409);
-    expect(response.body.data.code).toBe(code);
+    expect(response.body.data.hunt.code).toBe(code);
     expect(response.body.message).toEqual(expect.any(String));
     expect(await invitationsOf(hunt.id)).toHaveLength(0);
     expect(await pb.outbox()).toHaveLength(before);
@@ -334,7 +343,7 @@ describe("send invitations", () => {
     const firstHunt = await newHunt();
     await send(firstHunt.id);
     const [invitation] = await invitationsOf(firstHunt.id);
-    await pb.api(recordsPath("invitations", invitation?.id), {
+    await pb.api(recordsPath("invitations", String(invitation?.id)), {
       method: "PATCH",
       token: pb.organizerToken,
       body: { participation: "absent", answered_via: "manual" },
