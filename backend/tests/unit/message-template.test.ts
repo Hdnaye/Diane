@@ -234,9 +234,20 @@ describe("default template", () => {
     return days;
   });
 
-  it.each(LONGEST_DAYS.map((days, month) => [month + 1, days]))(
-    "renders as GSM-7 in at most 2 SMS segments (month %i)",
-    (_, days) => {
+  // Longest public URL recommended in the README (DIANE_PUBLIC_URL).
+  const LONG_PUBLIC_URL = "https://diane-chasse-du-saint-hubert.example.org/d";
+
+  it("uses a 50-character public URL", () => {
+    expect(LONG_PUBLIC_URL).toHaveLength(50);
+  });
+
+  it.each(
+    [LINK, `${LONG_PUBLIC_URL}/r/${"A".repeat(43)}`].flatMap((link) =>
+      LONGEST_DAYS.map((days, month) => [month + 1, link, days]),
+    ),
+  )(
+    "renders as GSM-7 in at most 2 SMS segments (month %i, %s)",
+    (_, link, days) => {
       for (const iso of days as string[]) {
         const text = renderSms(
           DEFAULT_TEMPLATE_BODY,
@@ -249,7 +260,7 @@ describe("default template", () => {
                 " 17:30:00.000Z",
               ),
             },
-            LINK,
+            link as string,
             { several: true },
           ),
         );
