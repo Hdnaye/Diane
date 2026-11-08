@@ -4,6 +4,8 @@
 import postcss from 'postcss';
 import tailwind from 'tailwindcss';
 // Same compiler NativeWind's Metro transformer uses to turn the CSS into native styles.
+// postcss and react-native-css-interop are devDependencies, pinned to the versions NativeWind
+// resolves (css-interop is pinned exactly by nativewind 4.2.7).
 import { cssToReactNativeRuntime } from 'react-native-css-interop/dist/css-to-rn';
 
 import { fontFamily } from '@/theme/tokens';
