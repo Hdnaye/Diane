@@ -37,6 +37,8 @@ const otherPairs = [
   ['primary', colors.primary.DEFAULT, 'accent-light', colors.accent.light],
   ['muted-foreground', colors.muted.foreground, 'background', colors.background],
   ['muted-foreground', colors.muted.foreground, 'card', colors.card.DEFAULT],
+  // Form error messages.
+  ['danger', colors.danger.DEFAULT, 'background', colors.background],
 ];
 
 describe('theme text/background pairs', () => {
@@ -46,6 +48,16 @@ describe('theme text/background pairs', () => {
       expect(contrastRatio(text, background)).toBeGreaterThanOrEqual(AA_TEXT);
     }
   );
+
+  // Rule: the accent green (leaf) is never a text color and never sits under white text.
+  // It is only for icons and decorations; text goes on accent-light or uses accent-foreground.
+  it.each([
+    ['white text on accent', colors.white, colors.accent.DEFAULT],
+    ['accent text on the background', colors.accent.DEFAULT, colors.background],
+    ['accent text on a card', colors.accent.DEFAULT, colors.card.DEFAULT],
+  ])('%s stays below 4.5:1, so it must not be used', (_pair, text, background) => {
+    expect(contrastRatio(text, background)).toBeLessThan(AA_TEXT);
+  });
 
   it('defines the status colors', () => {
     expect(isGroup(colors.danger)).toBe(true);
