@@ -16,6 +16,7 @@ export const Collections = {
   Members: 'members',
   MessageTemplates: 'message_templates',
   Organizers: 'organizers',
+  SmsInbound: 'sms_inbound',
   SmsReviewQueue: 'sms_review_queue',
 } as const;
 export type Collections = (typeof Collections)[keyof typeof Collections];
@@ -106,6 +107,7 @@ export const HuntsStatusOptions = {
 } as const;
 export type HuntsStatusOptions = (typeof HuntsStatusOptions)[keyof typeof HuntsStatusOptions];
 export type HuntsRecord = {
+  cancelled_at?: IsoDateString;
   created: IsoAutoDateString;
   date: string;
   id: string;
@@ -152,15 +154,55 @@ export const InvitationsEmailStatusOptions = {
 } as const;
 export type InvitationsEmailStatusOptions =
   (typeof InvitationsEmailStatusOptions)[keyof typeof InvitationsEmailStatusOptions];
+
+export const InvitationsReminderSmsStatusOptions = {
+  sending: 'sending',
+  sent: 'sent',
+  failed: 'failed',
+  skipped: 'skipped',
+} as const;
+export type InvitationsReminderSmsStatusOptions =
+  (typeof InvitationsReminderSmsStatusOptions)[keyof typeof InvitationsReminderSmsStatusOptions];
+
+export const InvitationsReminderEmailStatusOptions = {
+  sending: 'sending',
+  sent: 'sent',
+  failed: 'failed',
+  skipped: 'skipped',
+} as const;
+export type InvitationsReminderEmailStatusOptions =
+  (typeof InvitationsReminderEmailStatusOptions)[keyof typeof InvitationsReminderEmailStatusOptions];
+
+export const InvitationsCancellationSmsStatusOptions = {
+  sending: 'sending',
+  sent: 'sent',
+  failed: 'failed',
+  skipped: 'skipped',
+} as const;
+export type InvitationsCancellationSmsStatusOptions =
+  (typeof InvitationsCancellationSmsStatusOptions)[keyof typeof InvitationsCancellationSmsStatusOptions];
+
+export const InvitationsCancellationEmailStatusOptions = {
+  sending: 'sending',
+  sent: 'sent',
+  failed: 'failed',
+  skipped: 'skipped',
+} as const;
+export type InvitationsCancellationEmailStatusOptions =
+  (typeof InvitationsCancellationEmailStatusOptions)[keyof typeof InvitationsCancellationEmailStatusOptions];
 export type InvitationsRecord = {
   answered_at?: IsoDateString;
   answered_via?: InvitationsAnsweredViaOptions;
+  cancellation_email_status?: InvitationsCancellationEmailStatusOptions;
+  cancellation_sms_status?: InvitationsCancellationSmsStatusOptions;
   created: IsoAutoDateString;
   email_status?: InvitationsEmailStatusOptions;
   hunt: RecordIdString;
   id: string;
   member: RecordIdString;
   participation: InvitationsParticipationOptions;
+  reminder_email_status?: InvitationsReminderEmailStatusOptions;
+  reminder_sms_status?: InvitationsReminderSmsStatusOptions;
   sms_status?: InvitationsSmsStatusOptions;
   token: string;
   updated: IsoAutoDateString;
@@ -196,14 +238,56 @@ export type OrganizersRecord = {
   verified?: boolean;
 };
 
+export const SmsInboundOutcomeOptions = {
+  applied: 'applied',
+  cancelled: 'cancelled',
+  review: 'review',
+  ignored: 'ignored',
+} as const;
+export type SmsInboundOutcomeOptions =
+  (typeof SmsInboundOutcomeOptions)[keyof typeof SmsInboundOutcomeOptions];
+
+export const SmsInboundConfirmationOptions = {
+  sending: 'sending',
+  sent: 'sent',
+  failed: 'failed',
+  skipped: 'skipped',
+} as const;
+export type SmsInboundConfirmationOptions =
+  (typeof SmsInboundConfirmationOptions)[keyof typeof SmsInboundConfirmationOptions];
+export type SmsInboundRecord = {
+  confirmation?: SmsInboundConfirmationOptions;
+  created: IsoAutoDateString;
+  event_id: string;
+  id: string;
+  member?: RecordIdString;
+  outcome: SmsInboundOutcomeOptions;
+  updated: IsoAutoDateString;
+};
+
+export const SmsReviewQueueReasonOptions = {
+  unknown_sender: 'unknown_sender',
+  inactive_member: 'inactive_member',
+  unrecognized: 'unrecognized',
+  no_open_invitation: 'no_open_invitation',
+  several_open_invitations: 'several_open_invitations',
+  unknown_day: 'unknown_day',
+  ambiguous_day: 'ambiguous_day',
+  deadline_passed: 'deadline_passed',
+  hunt_closed: 'hunt_closed',
+} as const;
+export type SmsReviewQueueReasonOptions =
+  (typeof SmsReviewQueueReasonOptions)[keyof typeof SmsReviewQueueReasonOptions];
 export type SmsReviewQueueRecord = {
   body: string;
   created: IsoAutoDateString;
   from_phone: string;
   id: string;
   member?: RecordIdString;
+  reason?: SmsReviewQueueReasonOptions;
   received_at: IsoDateString;
   resolved?: boolean;
+  resolved_at?: IsoDateString;
   updated: IsoAutoDateString;
 };
 
@@ -225,6 +309,8 @@ export type MessageTemplatesResponse<Texpand = unknown> = Required<MessageTempla
   BaseSystemFields<Texpand>;
 export type OrganizersResponse<Texpand = unknown> = Required<OrganizersRecord> &
   AuthSystemFields<Texpand>;
+export type SmsInboundResponse<Texpand = unknown> = Required<SmsInboundRecord> &
+  BaseSystemFields<Texpand>;
 export type SmsReviewQueueResponse<Texpand = unknown> = Required<SmsReviewQueueRecord> &
   BaseSystemFields<Texpand>;
 
@@ -241,6 +327,7 @@ export type CollectionRecords = {
   members: MembersRecord;
   message_templates: MessageTemplatesRecord;
   organizers: OrganizersRecord;
+  sms_inbound: SmsInboundRecord;
   sms_review_queue: SmsReviewQueueRecord;
 };
 
@@ -255,6 +342,7 @@ export type CollectionResponses = {
   members: MembersResponse;
   message_templates: MessageTemplatesResponse;
   organizers: OrganizersResponse;
+  sms_inbound: SmsInboundResponse;
   sms_review_queue: SmsReviewQueueResponse;
 };
 
