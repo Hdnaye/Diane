@@ -67,6 +67,8 @@ npm run format:check
 - Dates : `src/lib/dates.ts` (date-fns, locale `fr`) ; un jour est une clé locale `yyyy-MM-dd`.
 - Saisie heure / date limite : `StepperField`, gros boutons « − 1 h / + 1 h »… plutôt qu'un
   sélecteur natif (`@react-native-community/datetimepicker` ne fonctionne pas sur le web).
+  Date limite par défaut : maintenant + 48 h arrondi à l'heure suivante, ou la veille de la
+  battue à 20 h si c'est trop tard (`src/lib/hunt-form.ts`).
 - Les couleurs sont définies directement dans la config Tailwind, sans variables CSS, afin
   d'avoir une seule source (aussi lue par le thème de navigation). `components.json` garde
   quand même `cssVariables: true` : avec `false`, la CLI (basée sur shadcn) remplacerait les
