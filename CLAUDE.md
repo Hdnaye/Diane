@@ -99,8 +99,13 @@ si l'idée prend.
 - Dates : date-fns (locale `fr`).
 - Types des données : générés depuis le schéma PocketBase (pocketbase-typegen),
   jamais redéclarés à la main.
-- Le formulaire de réponse des adhérents est une page de l'app Expo
-  (ex. `/r/[token]`), exportée en web et servie par PocketBase.
+- Le formulaire de réponse des adhérents n'est PAS une page de l'app Expo :
+  c'est une page HTML/CSS/JS autonome et légère (`/r/{token}`), servie par
+  PocketBase (`backend/pb_public/`), qui appelle uniquement les routes publiques
+  `/api/diane/r/{token}`. Elle ne doit jamais contenir la clé organisateur ni
+  aucune variable `EXPO_PUBLIC_DIANE_ORGANIZER_*` (la clé est embarquée dans
+  l'export de l'app organisateur, qui n'est jamais servi publiquement).
+  Couleurs et police reprises des tokens de la DA.
 
 ## Tests et qualité
 - TDD obligatoire : test qui échoue → code minimal → refactor (un commit par étape).
