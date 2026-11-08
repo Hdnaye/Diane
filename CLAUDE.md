@@ -32,7 +32,8 @@ si l'idée prend.
   promotion automatique).
 - Invitation par SMS et e-mail à tous les adhérents : présence oui/non.
 - Message modèle réutilisable avec variables : date, heure, date limite
-  de réponse (défaut : +48 h).
+  de réponse (défaut : J+2 à 20h00 heure de Paris, ou la veille de la
+  battue à 20h00 si c'est trop tard).
 - Réponse de l'adhérent :
   - via un lien web personnel, sans compte ni mot de passe ;
   - par SMS : `OUI` / `NON`, suivi du jour du mois (`OUI 15`) quand plusieurs
