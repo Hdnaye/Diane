@@ -297,6 +297,62 @@ describe("resend failed invitations", () => {
     }
   });
 
+  async function setStatuses(
+    huntId: string,
+    memberId: string,
+    statuses: Record<string, string>,
+  ) {
+    const invitation = await invitationOf(huntId, memberId);
+    const response = await pb.api(recordsPath("invitations", invitation.id), {
+      method: "PATCH",
+      token: pb.organizerToken,
+      body: statuses,
+    });
+    expect(response.status).toBe(200);
+  }
+
+  it("takes over a sending interrupted by a restart", async () => {
+    const member = await newMember();
+    const hunt = await huntWithFailures();
+    // As claimed by a request killed before sending anything.
+    await setStatuses(hunt.id, member.id, {
+      sms_status: "sending",
+      email_status: "sending",
+    });
+
+    // A sending in progress (same run, recent) is left alone...
+    expect((await resend(hunt.id)).body.invited).toBe(0);
+
+    await pb.restart();
+    const response = await resend(hunt.id);
+
+    expect(response.body).toStrictEqual({
+      invited: 1,
+      sms: { sent: 1, failed: 0, skipped: 0 },
+      email: { sent: 1, failed: 0, skipped: 0 },
+    });
+    expect(await invitationOf(hunt.id, member.id)).toMatchObject({
+      sms_status: "sent",
+      email_status: "sent",
+    });
+    expect(smsTo(member.phone as string)).toHaveLength(2);
+    expect(mailsTo(member.email as string)).toHaveLength(1);
+  });
+
+  it("sends the channels never sent of a hunt already sent", async () => {
+    const member = await newMember();
+    const hunt = await huntWithFailures();
+    await setStatuses(hunt.id, member.id, { sms_status: "" });
+
+    const response = await resend(hunt.id);
+
+    expect(response.body.sms).toStrictEqual({ sent: 1, failed: 0, skipped: 0 });
+    expect(await invitationOf(hunt.id, member.id)).toMatchObject({
+      sms_status: "sent",
+      email_status: "sent",
+    });
+  });
+
   it.each([
     [{ status: "cancelled" }, "hunt_cancelled"],
     [{ status: "closed" }, "hunt_closed"],

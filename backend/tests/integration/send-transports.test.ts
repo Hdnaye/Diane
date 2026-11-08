@@ -325,6 +325,45 @@ describe("invitations through a gateway that does not answer", () => {
       expect(elapsed).toBeLessThan(9_000);
     },
   );
+
+  it(
+    "marks the channels being sent, and goes on after an error on one member",
+    { timeout: 30_000 },
+    async () => {
+      const first = await f.newMember();
+      const deleted = await f.newMember();
+      const last = await f.newMember();
+      const hunt = await f.newHunt();
+
+      const sending = f.send(hunt.id);
+      // While the first SMS waits for the gateway (5 s):
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      const during = await f.invitationOf(hunt.id, last.id);
+      // Deleting the member deletes its invitation: the loop meets an
+      // invitation that no longer exists.
+      const removed = await pb.api(recordsPath("members", deleted.id), {
+        method: "DELETE",
+        token: pb.organizerToken,
+      });
+      const response = await sending;
+
+      expect(during).toMatchObject({
+        sms_status: "sending",
+        email_status: "sending",
+      });
+      expect(removed.status).toBe(204);
+      expect(response.status).toBe(200);
+      expect(response.body.invited).toBe(3);
+      expect(await f.invitationOf(hunt.id, first.id)).toMatchObject({
+        sms_status: "failed",
+        email_status: "sent",
+      });
+      expect(await f.invitationOf(hunt.id, last.id)).toMatchObject({
+        sms_status: "failed",
+        email_status: "sent",
+      });
+    },
+  );
 });
 
 describe("invitations without public URL", () => {

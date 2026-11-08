@@ -11,6 +11,8 @@ const {
   publicAnswerView,
   invitationMessages,
   sendSummary,
+  channelsToResend,
+  STALE_SENDING_MS,
   toPocketBaseDate,
 } =
   require("../../pb_hooks/lib/invitations.cjs") as typeof import("../../pb_hooks/lib/invitations.cjs");
@@ -251,6 +253,72 @@ describe("invitationMessages", () => {
     expect(
       invitationMessages({ body, hunt: hunt(), link: "L", several: true }).sms,
     ).toBe("Battue le samedi 14 novembre. OUI 14 L");
+  });
+});
+
+describe("channelsToResend", () => {
+  // Booted at 09:00, now 10:00.
+  const context = {
+    huntSent: true,
+    bootedAt: new Date("2026-11-08T09:00:00.000Z"),
+    now: NOW,
+  };
+  const invitation = (
+    sms_status: string,
+    email_status: string,
+    updated = "2026-11-08 09:59:00.000Z",
+  ) => ({ sms_status, email_status, updated });
+
+  it("resends failed channels only", () => {
+    expect(
+      channelsToResend(invitation("failed", "sent"), context),
+    ).toStrictEqual({ sms: true, email: false });
+    expect(
+      channelsToResend(invitation("skipped", "failed"), context),
+    ).toStrictEqual({ sms: false, email: true });
+  });
+
+  it("leaves a sending in progress alone", () => {
+    expect(
+      channelsToResend(invitation("sending", "sending"), context),
+    ).toStrictEqual({ sms: false, email: false });
+  });
+
+  it(`takes over a sending older than ${STALE_SENDING_MS / 60000} minutes`, () => {
+    const at = (ms: number) =>
+      new Date(NOW.getTime() - ms).toISOString().replace("T", " ");
+
+    expect(
+      channelsToResend(
+        invitation("sending", "sent", at(STALE_SENDING_MS)),
+        context,
+      ),
+    ).toStrictEqual({ sms: true, email: false });
+    expect(
+      channelsToResend(
+        invitation("sending", "sent", at(STALE_SENDING_MS - 1000)),
+        context,
+      ),
+    ).toStrictEqual({ sms: false, email: false });
+  });
+
+  it("takes over a sending interrupted by a restart", () => {
+    expect(
+      channelsToResend(
+        invitation("sending", "sending", "2026-11-08 08:59:59.000Z"),
+        context,
+      ),
+    ).toStrictEqual({ sms: true, email: true });
+  });
+
+  it("sends channels never sent of a hunt already sent", () => {
+    expect(channelsToResend(invitation("", "sent"), context)).toStrictEqual({
+      sms: true,
+      email: false,
+    });
+    expect(
+      channelsToResend(invitation("", ""), { ...context, huntSent: false }),
+    ).toStrictEqual({ sms: false, email: false });
   });
 });
 
