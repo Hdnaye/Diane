@@ -37,8 +37,19 @@ $app.rootCmd?.addCommand(
       )[0];
       const record =
         existing ?? new Record($app.findCollectionByNameOrId("organizers"));
-      record.setEmail(email);
-      record.setPassword(key);
+      // Setting the password (even the same key) and changing the email
+      // regenerate the token key, which ends the app's session: only do it
+      // when the email or the key really changes, so that running
+      // `npm run setup` again keeps the app logged in.
+      const emailChanged = !existing || record.email() !== email;
+      const keyChanged = !existing || !record.validatePassword(key);
+      if (existing && !emailChanged && !keyChanged && record.verified()) {
+        console.log(`Organizer account unchanged (id ${record.id}).`);
+        return;
+      }
+      if (emailChanged) record.setEmail(email);
+      if (keyChanged) record.setPassword(key);
+      else if (emailChanged) record.refreshTokenKey();
       record.setVerified(true);
       try {
         $app.save(record);
