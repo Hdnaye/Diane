@@ -159,7 +159,7 @@ describe('EditMemberScreen', () => {
     await user.clear(screen.getByLabelText(NAME));
     await user.type(screen.getByLabelText(NAME), 'Jean Exemple fils');
     await user.type(screen.getByLabelText(EMAIL), 'jean@example.com');
-    await user.press(screen.getByRole('button', { name: 'Enregistrer les modifications' }));
+    await user.press(screen.getByRole('button', { name: 'Enregistrer' }));
 
     expect(await screen.findByRole('heading', { name: 'Jean Exemple fils' })).toBeOnTheScreen();
     expect(await repository.list()).toContainEqual({
@@ -187,7 +187,7 @@ describe('EditMemberScreen', () => {
     ).toBeOnTheScreen();
     expect(await repository.list()).toContainEqual(JEAN);
 
-    await user.press(screen.getByRole('button', { name: 'Oui, supprimer définitivement' }));
+    await user.press(screen.getByRole('button', { name: 'Oui, supprimer' }));
 
     expect(await screen.findByText('1 adhérent, dont 1 inactif')).toBeOnTheScreen();
     expect(screen.queryByRole('heading', { name: 'Jean Exemple' })).not.toBeOnTheScreen();
@@ -236,7 +236,7 @@ describe('EditMemberScreen', () => {
     await user.press(await screen.findByRole('button', { name: /Jean Exemple/ }));
 
     await user.press(await screen.findByRole('button', { name: "Supprimer l'adhérent" }));
-    await user.press(screen.getByRole('button', { name: 'Oui, supprimer définitivement' }));
+    await user.press(screen.getByRole('button', { name: 'Oui, supprimer' }));
 
     expect(
       await screen.findByText(
