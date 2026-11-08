@@ -499,6 +499,22 @@ const INBOUND_REPLIES = [
 ] as { answer: "yes" | "no"; day?: number }[];
 
 /** Hunts for notification texts and reminders, at INBOUND_NOW. */
+const NOTIFIED_HUNT = {
+  date: "2027-08-15",
+  meeting_time: "23:30",
+  response_deadline: "2027-08-13 21:30:00.000Z",
+  status: "invitations_sent",
+  invitations_sent_at: "2026-11-06 10:00:00.000Z",
+  reminder_sent_at: "",
+};
+const CANCELLED_HUNT = {
+  date: "2026-11-01",
+  meeting_time: "07:05",
+  response_deadline: "",
+  status: "cancelled",
+  invitations_sent_at: "",
+  reminder_sent_at: "",
+};
 const NOTIFIED_HUNTS = [
   {
     date: "2026-11-14",
@@ -527,19 +543,19 @@ const NOTIFIED_HUNTS = [
 ];
 const PLANNED_ANSWERS = [
   {
-    hunt: { ...NOTIFIED_HUNTS[1], max_participants: 1 },
+    hunt: { ...NOTIFIED_HUNT, max_participants: 1 },
     current: "pending",
     others: ["present"],
     answer: "yes",
   },
   {
-    hunt: { ...NOTIFIED_HUNTS[1], max_participants: 0 },
+    hunt: { ...NOTIFIED_HUNT, max_participants: 0 },
     current: "absent",
     others: ["present", "waiting_list"],
     answer: "yes",
   },
   {
-    hunt: { ...NOTIFIED_HUNTS[2], max_participants: 0 },
+    hunt: { ...CANCELLED_HUNT, max_participants: 0 },
     current: "pending",
     others: [],
     answer: "no",

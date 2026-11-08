@@ -77,7 +77,8 @@ describe("confirmationSms", () => {
         "cancelled",
       ] as const) {
         const text = confirmationSms(outcome, hunt);
-        expect(smsSegments(text), text).toMatchObject({
+        expect({ text, ...smsSegments(text) }).toMatchObject({
+          text,
           encoding: "GSM-7",
           segments: 1,
         });
@@ -110,7 +111,8 @@ describe("reminderMessages", () => {
   it("fits 1 SMS (GSM-7) for every date", () => {
     for (const hunt of LONGEST_HUNTS) {
       const text = reminderMessages(hunt, link).sms;
-      expect(smsSegments(text), text).toMatchObject({
+      expect({ text, ...smsSegments(text) }).toMatchObject({
+        text,
         encoding: "GSM-7",
         segments: 1,
       });
@@ -132,7 +134,8 @@ describe("cancellationMessages", () => {
   it("fits 1 SMS (GSM-7) for every date", () => {
     for (const hunt of LONGEST_HUNTS) {
       const text = cancellationMessages(hunt).sms;
-      expect(smsSegments(text), text).toMatchObject({
+      expect({ text, ...smsSegments(text) }).toMatchObject({
+        text,
         encoding: "GSM-7",
         segments: 1,
       });
