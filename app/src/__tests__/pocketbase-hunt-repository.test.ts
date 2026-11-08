@@ -99,7 +99,7 @@ describe('PocketBase hunt repository', () => {
       status: 200,
       body: huntRecord({
         id: 'hunt3',
-        ...(request.body as object),
+        ...(request.body as Pick<HuntsResponse, 'date'>),
         response_deadline: '2026-11-09 19:00:00.000Z',
       }),
     }));
@@ -124,7 +124,7 @@ describe('PocketBase hunt repository', () => {
   it('stores "no limit" as 0', async () => {
     const { requests, repository } = setUp((request) => ({
       status: 200,
-      body: huntRecord({ id: 'hunt4', ...(request.body as object) }),
+      body: huntRecord({ id: 'hunt4', ...(request.body as Pick<HuntsResponse, 'date'>) }),
     }));
 
     const created = await repository.create({ ...newHunt, max_participants: null });
