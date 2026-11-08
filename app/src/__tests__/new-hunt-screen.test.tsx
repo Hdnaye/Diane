@@ -100,6 +100,25 @@ describe('NewHuntScreen', () => {
     expect(await screen.findByText('Choisissez le jour de la battue.')).toBeOnTheScreen();
   });
 
+  it('shows every error at once', async () => {
+    const user = userEvent.setup();
+    await openForm();
+
+    await user.type(screen.getByLabelText('Nombre maximum de participants (facultatif)'), '0');
+    for (let i = 0; i < 3; i++) {
+      await user.press(
+        screen.getByRole('button', { name: '− 1 jour, date limite un jour plus tôt' })
+      );
+    }
+    await submit(user);
+
+    expect(await screen.findByText('Choisissez le jour de la battue.')).toBeOnTheScreen();
+    expect(
+      screen.getByText('Indiquez un nombre entier, au moins 1, ou laissez vide.')
+    ).toBeOnTheScreen();
+    expect(screen.getByText('La date limite de réponse est déjà passée.')).toBeOnTheScreen();
+  });
+
   it('refuses a day in the past', async () => {
     const user = userEvent.setup();
     await openForm('?date=2026-11-02');
