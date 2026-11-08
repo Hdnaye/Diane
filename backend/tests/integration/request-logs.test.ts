@@ -117,13 +117,28 @@ describe("request logs", () => {
       expect(statuses).toContain(429);
       // Another request from the answer page (Referer only).
       await call("/api/diane/health");
+      // Hand-crafted requests: token in the query, in upper case, on an
+      // unknown route, in an encoded Referer, in the User-Agent.
+      const crafted = (pathname: string, headers: Record<string, string>) =>
+        fetch(`${pb.process.url}${pathname}`, { headers });
+      await crafted(`/api/diane/health?token=${token}`, {});
+      await crafted(`/api/diane/R/${token}`, {});
+      await crafted(`/api/whatever/${token}`, {});
+      await crafted("/api/diane/health", {
+        Referer: `${TEST_PUBLIC_URL}/r%2F${token}`,
+      });
+      await crafted("/api/diane/health", { "User-Agent": `Agent ${token}` });
 
       const logs = await waitForLogs(
         (entry) => entry.message.includes("/r/"),
         MAX_ANSWER_REQUESTS + 5,
       );
+      await waitForLogs(
+        (entry) => entry.message.startsWith("GET /api/whatever/"),
+        1,
+      );
 
-      const text = JSON.stringify(logs);
+      const text = JSON.stringify(await allLogs());
       expect(text).not.toContain(token);
       expect(text).not.toContain(unknown);
       expect(text).not.toMatch(/userIP|remoteIP/);

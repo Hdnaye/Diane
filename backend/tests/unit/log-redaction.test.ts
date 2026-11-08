@@ -28,7 +28,26 @@ describe("redactAnswerTokens", () => {
   });
 
   it.each([
+    // Hand-crafted requests: any run of 43+ alphanumeric characters (the
+    // token's length) is redacted, wherever it is.
+    [`/api/diane/R/${TOKEN}`, "/api/diane/R/:token"],
+    [`/api/whatever/${TOKEN}`, "/api/whatever/:token"],
+    [`/api/health?token=${TOKEN}&a=1`, "/api/health?token=:token&a=1"],
+    [`token=${TOKEN}`, "token=:token"],
+    [
+      `https://diane.example.org/r%2F${TOKEN}`,
+      "https://diane.example.org/r%:token",
+    ],
+    [`Mozilla/5.0 (${TOKEN})`, "Mozilla/5.0 (:token)"],
+    [`x${TOKEN}y`, ":token"],
+  ])("redacts a token anywhere: %s", (input, expected) => {
+    expect(redactAnswerTokens(input)).toBe(expected);
+  });
+
+  it.each([
     "",
+    "A".repeat(42),
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
     "/api/diane/health",
     "/api/diane/hunts/abc/send-invitations",
     "/api/collections/members/records",
