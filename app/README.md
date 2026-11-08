@@ -12,6 +12,33 @@ cd app
 npm install
 ```
 
+## Connexion au serveur (PocketBase)
+
+L'app parle au back-end PocketBase de `backend/` (voir `backend/README.md`) et s'authentifie
+**silencieusement** au démarrage avec le compte organisateur : aucun écran de connexion.
+
+```bash
+cp .env.example .env    # jamais commité (couvert par .gitignore)
+```
+
+Puis renseigner dans `app/.env` :
+
+| Variable                            | Valeur                                                                                                                                                                                                                                                                              |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EXPO_PUBLIC_DIANE_API_URL`         | adresse de PocketBase vue du téléphone : l'IP de l'ordinateur sur le réseau local (ex. `http://192.168.1.20:8090`, lancer alors le back avec `npm run dev -- --http=0.0.0.0:8090`), pas `127.0.0.1` dans Expo Go ; `http://127.0.0.1:8090` convient pour le web sur la même machine |
+| `EXPO_PUBLIC_DIANE_ORGANIZER_EMAIL` | la même valeur que `DIANE_ORGANIZER_EMAIL` de `backend/.env`                                                                                                                                                                                                                        |
+| `EXPO_PUBLIC_DIANE_ORGANIZER_KEY`   | la même valeur que `DIANE_ORGANIZER_KEY` de `backend/.env`                                                                                                                                                                                                                          |
+
+Relancer `npm start` (ou refaire l'export web) après un changement : Expo intègre ces variables
+au moment du build.
+
+**La clé est embarquée dans l'app** (et dans l'export web) : tout ce qui commence par
+`EXPO_PUBLIC_` est lisible par qui a l'app. Acceptable pour la démo du POC (CLAUDE.md, « Accès
+organisateur ») ; à remplacer par une vraie authentification avant toute distribution.
+
+Si une variable manque ou si le serveur ne répond pas, l'accueil affiche « Connexion au serveur
+impossible… » avec un bouton « Réessayer ».
+
 ## Lancer dans Expo Go
 
 ```bash
@@ -57,18 +84,35 @@ npm run format:check
   graisse est une famille), chargée au démarrage, l'écran de lancement restant affiché d'ici là.
 - Statuts de réponse : `StatusBadge` (icône + libellé, jamais la couleur seule).
 - Données : les écrans passent par TanStack Query (`src/data/hunt-queries.ts`) vers l'interface
-  `HuntRepository` (`list`, `create`), fournie par `HuntRepositoryProvider`. Pour l'instant une
-  implémentation en mémoire (`src/data/app-hunt-repository.ts`, deux battues de démo fictives) ;
-  brancher PocketBase ne change que cette implémentation. Types provisoires : `src/data/types.ts`
-  (à remplacer par ceux de pocketbase-typegen).
+  `HuntRepository` (`list`, `create`), fournie par `HuntRepositoryProvider` avec la connexion au
+  serveur. Dans l'app : PocketBase (`src/data/app-backend.ts`, SDK JS officiel `pocketbase`,
+  JS pur, compatible Expo Go et web) ; dans les tests : une implémentation en mémoire, et un faux
+  `fetch` pour tester le client PocketBase (aucun appel réseau).
+  - Authentification (`src/data/pocketbase-session.ts`) : `auth-with-password` sur `organizers`,
+    une seule à la fois (double montage compris), réessayée sur 429 (le back limite les
+    authentifications à 2 par 3 s), renouvelée quand le jeton expire ou sur un 401. Jeton gardé
+    en mémoire seulement.
+  - Les requêtes sont réessayées une fois (`src/lib/query-client.ts`) : serveur injoignable
+    signalé en 2 s environ.
+  - Types : `src/data/types.ts` dérive ceux de pocketbase-typegen
+    (`src/lib/pocketbase-types.ts`, généré par `npm run typegen` dans `backend/`) ; seul écart,
+    `max_participants` vaut `null` côté app quand il n'y a pas de limite (`0` dans PocketBase).
+  - Un jour déjà pris (index unique sur `date`) devient `HuntDayTakenError`, affichée par le
+    formulaire.
 - Calendrier : `HuntCalendar` (react-native-calendars, 100 % JS), locale française construite
   avec date-fns, semaine commençant le lundi ; jours rendus par un composant à classes NativeWind
   (aujourd'hui cerclé, battue en `accent-light`, sélection en `primary`).
-- Dates : `src/lib/dates.ts` (date-fns, locale `fr`) ; un jour est une clé locale `yyyy-MM-dd`.
+- Dates : `src/lib/dates.ts` (date-fns, locale `fr`) ; un jour est une clé `yyyy-MM-dd`.
+  Jours, heures de rendez-vous et dates limites sont **en heure de Paris**, quel que soit le
+  fuseau du téléphone (`src/lib/paris-time.ts`, même règle que le back : heure d'été de l'UE
+  appliquée directement). Les tests tournent avec le « téléphone » à New York
+  (`jest.config.js`) pour le vérifier.
 - Saisie heure / date limite : `StepperField`, gros boutons « − 1 h / + 1 h »… plutôt qu'un
   sélecteur natif (`@react-native-community/datetimepicker` ne fonctionne pas sur le web).
-  Date limite par défaut : maintenant + 48 h arrondi à l'heure suivante, ou la veille de la
-  battue à 20 h si c'est trop tard (`src/lib/hunt-form.ts`).
+  Date limite par défaut (`src/lib/hunt-form.ts`, même règle que le back) : J+2 à 20 h 00
+  heure de Paris (J = aujourd'hui) ; si ce n'est pas strictement avant la battue, la veille de
+  la battue à 20 h 00 (si c'est déjà passé, le formulaire l'indique). Elle suit le jour et
+  l'heure choisis tant que l'organisateur ne l'a pas modifiée.
 - Les couleurs sont définies directement dans la config Tailwind, sans variables CSS, afin
   d'avoir une seule source (aussi lue par le thème de navigation). `components.json` garde
   quand même `cssVariables: true` : avec `false`, la CLI (basée sur shadcn) remplacerait les
