@@ -92,8 +92,10 @@ describe("sendPlan", () => {
   it("gives a French message with each refusal", () => {
     const refusal = sendPlan(hunt({ status: "cancelled" }), NOW);
 
-    expect(refusal.ok).toBe(false);
-    if (!refusal.ok) expect(refusal.message).toMatch(/annulée/);
+    expect(refusal).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/annulée/),
+    });
   });
 });
 

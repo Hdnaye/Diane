@@ -255,8 +255,11 @@ describe("default template", () => {
         );
         const size = smsSegments(text);
 
-        expect(size.encoding, text).toBe("GSM-7");
-        expect(size.segments, text).toBeLessThanOrEqual(2);
+        expect({
+          text,
+          encoding: size.encoding,
+          fits: size.segments <= 2,
+        }).toStrictEqual({ text, encoding: "GSM-7", fits: true });
       }
     },
   );

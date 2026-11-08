@@ -28,7 +28,8 @@ describe("organizers OTP flows", () => {
       headers,
       body: JSON.stringify(body),
     });
-    return { status: response.status, body: await response.json() };
+    const json = (await response.json()) as { token?: string; id?: string };
+    return { status: response.status, body: json };
   }
 
   beforeAll(async () => {
@@ -42,15 +43,15 @@ describe("organizers OTP flows", () => {
       "/api/collections/_superusers/auth-with-password",
       { identity: superuser.email, password: superuser.password },
     );
-    const token = auth.body.token as string;
+    const token = String(auth.body.token);
     const enabled = await call(
       "PATCH",
       "/api/collections/organizers",
       { otp: { enabled: true } },
       token,
     );
-    expect(enabled.status).toBe(200);
-    collectionId = enabled.body.id;
+    if (enabled.status !== 200) throw new Error("Could not enable OTP.");
+    collectionId = String(enabled.body.id);
     const password = randomBytes(32).toString("hex");
     const created = await call(
       "POST",
@@ -58,7 +59,7 @@ describe("organizers OTP flows", () => {
       { email: organizerEmail, password, passwordConfirm: password },
       token,
     );
-    expect(created.status).toBe(200);
+    if (created.status !== 200) throw new Error("Could not create organizer.");
   });
 
   afterAll(async () => {
