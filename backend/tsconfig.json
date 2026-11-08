@@ -1,9 +1,10 @@
 {
-  // Node side: setup/dev scripts, tests and tool configs.
+  // Node side: setup/dev scripts, tests and tool configs; and the browser
+  // side: the members' answer page (pb_public/, DOM types), tested in jsdom.
   // PocketBase JS (pb_hooks/, pb_migrations/) is checked by tsconfig.pocketbase.json.
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "types": ["node"],
@@ -15,5 +16,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["scripts", "tests", "*.config.js", "*.config.ts"]
+  "include": ["scripts", "tests", "pb_public", "*.config.js", "*.config.ts"]
 }

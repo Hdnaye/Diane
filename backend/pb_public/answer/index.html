@@ -1,0 +1,86 @@
+<!doctype html>
+<!--
+  Members' answer page, served by PocketBase for /r/{token}
+  (pb_hooks/answer-page.pb.js). Standalone: no framework, nothing loaded
+  from another site, no cookie, no secret. answer.js reads the token
+  in the URL and only calls the public routes /api/diane/r/{token}.
+-->
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Votre réponse à la battue</title>
+    <link rel="stylesheet" href="/answer/answer.css" />
+    <script type="module" src="/answer/main.js"></script>
+  </head>
+  <body>
+    <main class="page">
+      <p class="app-name">Diane · Réponse à la battue</p>
+
+      <section id="loading" class="card" aria-busy="true">
+        <p class="lead">Chargement…</p>
+      </section>
+
+      <section id="error" class="card" role="alert" hidden>
+        <h1 id="error-title" class="title" tabindex="-1"></h1>
+        <p id="error-detail" class="lead"></p>
+        <button id="retry" type="button" class="button button-primary" hidden>
+          Réessayer
+        </button>
+      </section>
+
+      <section id="hunt" class="card" hidden>
+        <p id="notice" class="notice" hidden></p>
+        <h1 id="hunt-title" class="title" tabindex="-1">
+          <span class="eyebrow">Battue du</span>
+          <span id="hunt-date" class="hunt-date"></span>
+        </h1>
+        <p id="hunt-time-line" class="hunt-time">
+          Rendez-vous à <strong id="hunt-time"></strong>
+        </p>
+
+        <p id="deadline" class="deadline" hidden></p>
+        <p id="current" class="current"></p>
+
+        <div id="answers" class="answers" hidden>
+          <button
+            id="answer-yes"
+            type="button"
+            class="button button-yes"
+            aria-pressed="false"
+          >
+            Je viens
+          </button>
+          <button
+            id="answer-no"
+            type="button"
+            class="button button-no"
+            aria-pressed="false"
+          >
+            Je ne viens pas
+          </button>
+        </div>
+
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+        <button
+          id="send-retry"
+          type="button"
+          class="button button-primary"
+          hidden
+        >
+          Réessayer
+        </button>
+      </section>
+
+      <noscript>
+        <p class="card lead">
+          Cette page a besoin de JavaScript pour enregistrer votre réponse. Vous
+          pouvez aussi répondre par SMS (OUI ou NON) ou contacter
+          l'organisateur.
+        </p>
+      </noscript>
+    </main>
+  </body>
+</html>
