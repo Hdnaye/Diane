@@ -43,7 +43,7 @@ export function createPocketBaseHuntRepository(
   };
 }
 
-function toHunt(record: HuntsResponse): Hunt {
+export function toHunt(record: HuntsResponse): Hunt {
   return {
     id: record.id,
     date: record.date,
@@ -65,12 +65,12 @@ function toCreateRecord(hunt: NewHunt): Create<'hunts'> {
 }
 
 /** "2026-11-09 19:00:00.000Z" (PocketBase) → "2026-11-09T19:00:00.000Z"; empty stays empty. */
-function toIsoInstant(dateTime: string): string {
+export function toIsoInstant(dateTime: string): string {
   return dateTime ? new Date(dateTime.replace(' ', 'T')).toISOString() : '';
 }
 
 /** ISO instant → PocketBase's datetime format, "2026-11-09 19:00:00.000Z". */
-function toPocketBaseDateTime(instant: string): string {
+export function toPocketBaseDateTime(instant: string): string {
   return new Date(instant).toISOString().replace('T', ' ');
 }
 
