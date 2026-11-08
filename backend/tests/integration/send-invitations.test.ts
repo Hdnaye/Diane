@@ -308,8 +308,8 @@ describe("send invitations", () => {
     });
     // Sending may cross midnight (Paris) during the request.
     expect([
-      defaultDeadline(hunt, start),
-      defaultDeadline(hunt, new Date()),
+      defaultDeadline(hunt as ApiRecord & { meeting_time: string }, start),
+      defaultDeadline(hunt as ApiRecord & { meeting_time: string }, new Date()),
     ]).toContain(updated.body.response_deadline);
   });
 

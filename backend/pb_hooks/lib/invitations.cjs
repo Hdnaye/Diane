@@ -19,9 +19,9 @@ const {
 } = require("./message-template.cjs");
 
 /**
- * Default response deadline (CLAUDE.md: about +48 h), rounded to a time
- * easy to read in a message: this many days after the sending day, at
- * DEFAULT_DEADLINE_TIME (Paris).
+ * Default response deadline (CLAUDE.md), at a time easy to read in a
+ * message: DEFAULT_DEADLINE_DAYS after the sending day at
+ * DEFAULT_DEADLINE_TIME (Paris), or the day before the hunt at that time.
  */
 const DEFAULT_DEADLINE_DAYS = 2;
 const DEFAULT_DEADLINE_TIME = "20:00";
@@ -49,25 +49,43 @@ function toPocketBaseDate(date) {
 }
 
 /**
- * Default response deadline of invitations sent at `now`: the Paris day of
- * `now` + 2 days, at 20:00 Paris (e.g. sent on Sunday 11:00 -> Tuesday
- * 20:00).
- *
- * @param {Date} now
- * @returns {string} PocketBase UTC datetime.
+ * @param {string} day YYYY-MM-DD.
+ * @param {number} days
+ * @returns {string} YYYY-MM-DD, `days` later (or earlier when negative).
  */
-function defaultDeadline(now) {
-  const [year, month, date] = utcToParis(now).day.split("-").map(Number);
-  const day = new Date(
-    Date.UTC(
-      Number(year),
-      Number(month) - 1,
-      Number(date) + DEFAULT_DEADLINE_DAYS,
-    ),
+function addDays(day, days) {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(
+    Date.UTC(Number(year), Number(month) - 1, Number(date) + days),
   )
     .toISOString()
     .slice(0, 10);
-  return toPocketBaseDate(parisToUtc(day, DEFAULT_DEADLINE_TIME));
+}
+
+/**
+ * Default response deadline of invitations to `hunt` sent at `now` (Paris
+ * times):
+ * - the sending day + 2 days at 20:00, if strictly before the hunt starts
+ *   (sent on Sunday 11:00 -> Tuesday 20:00);
+ * - else the day before the hunt at 20:00, if still ahead;
+ * - else none (null): the organizer must set one.
+ *
+ * @param {{ date: string, meeting_time: string }} hunt
+ * @param {Date} now
+ * @returns {string | null} PocketBase UTC datetime.
+ */
+function defaultDeadline(hunt, now) {
+  const start = parisToUtc(hunt.date, hunt.meeting_time).getTime();
+  const dayPlus2 = parisToUtc(
+    addDays(utcToParis(now).day, DEFAULT_DEADLINE_DAYS),
+    DEFAULT_DEADLINE_TIME,
+  );
+  if (dayPlus2.getTime() < start) return toPocketBaseDate(dayPlus2);
+  const dayBefore = parisToUtc(addDays(hunt.date, -1), DEFAULT_DEADLINE_TIME);
+  if (dayBefore.getTime() > now.getTime() && dayBefore.getTime() < start) {
+    return toPocketBaseDate(dayBefore);
+  }
+  return null;
 }
 
 /**
@@ -128,16 +146,13 @@ function sendPlan(hunt, now) {
     }
     return { ok: true, deadline: null };
   }
-  const byDefault = defaultDeadline(now);
-  if (
-    /** @type {Date} */ (parseUtcDateTime(byDefault)).getTime() >=
-    parisToUtc(hunt.date, hunt.meeting_time).getTime()
-  ) {
+  const byDefault = defaultDeadline(hunt, now);
+  if (byDefault === null) {
     return {
       ok: false,
       code: "deadline_missing",
       message:
-        "La battue a lieu avant la date limite par défaut (dans 2 jours à 20h00) : fixez une date limite de réponse.",
+        "La battue est trop proche pour une date limite par défaut (la veille à 20h00 est passée) : fixez une date limite de réponse.",
     };
   }
   return { ok: true, deadline: byDefault };
