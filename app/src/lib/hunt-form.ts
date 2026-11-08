@@ -1,8 +1,8 @@
-import { addDays, addHours, roundToNearestHours, set, startOfMinute } from 'date-fns';
 import { z } from 'zod';
 
 import type { NewHunt } from '@/data/types';
-import { formatLongDay, fromDateKey, toDateKey } from '@/lib/dates';
+import { formatLongDay } from '@/lib/dates';
+import { addDaysToKey, parisDay, parisToUtc } from '@/lib/paris-time';
 
 /** What the creation form edits (the max participants field is free text). */
 export type HuntFormValues = {
@@ -13,30 +13,25 @@ export type HuntFormValues = {
 };
 
 export const DEFAULT_MEETING_TIME = '08:00';
-/** Members have 48 hours to answer by default. */
-export const DEFAULT_ANSWER_DELAY_HOURS = 48;
-/** When 48 hours is too late, the default deadline is the eve of the hunt at this hour. */
-export const EVE_DEADLINE_HOUR = 20;
+/** By default, members answer until two days after today (in Paris)… */
+export const DEFAULT_ANSWER_DELAY_DAYS = 2;
+/** …at 20 h 00, or until the eve of the hunt at 20 h 00 when that is too late. */
+export const DEADLINE_TIME = '20:00';
 
 /**
- * Default answer deadline: 48 hours from now, rounded up to the next hour ("11 h 00" reads
- * better than "10 h 09"). If that is not before the hunt, the eve of the hunt at 20 h 00
- * (left as is even if already passed: the form then shows the error).
+ * Default answer deadline, in Paris time whatever the phone's time zone (same rule as the
+ * back-end): two days after today at 20 h 00. If that is not strictly before the hunt, the eve
+ * of the hunt at 20 h 00, left as is even if already passed (the form then shows the error).
  */
 export function defaultResponseDeadline(now: Date, date = '', meetingTime = DEFAULT_MEETING_TIME) {
-  // Seconds are ignored: only a time like "10 h 09" is rounded up.
-  const rounded = roundToNearestHours(startOfMinute(addHours(now, DEFAULT_ANSWER_DELAY_HOURS)), {
-    roundingMethod: 'ceil',
-  });
-  if (!date || rounded < huntStart(date, meetingTime)) {
-    return rounded;
+  const inTwoDays = parisToUtc(
+    addDaysToKey(parisDay(now), DEFAULT_ANSWER_DELAY_DAYS),
+    DEADLINE_TIME
+  );
+  if (!date || inTwoDays < huntStart(date, meetingTime)) {
+    return inTwoDays;
   }
-  return set(addDays(fromDateKey(date), -1), {
-    hours: EVE_DEADLINE_HOUR,
-    minutes: 0,
-    seconds: 0,
-    milliseconds: 0,
-  });
+  return parisToUtc(addDaysToKey(date, -1), DEADLINE_TIME);
 }
 
 export function defaultHuntFormValues(now: Date, date = ''): HuntFormValues {
@@ -48,10 +43,9 @@ export function defaultHuntFormValues(now: Date, date = ''): HuntFormValues {
   };
 }
 
-/** Start of a hunt: its day at the meeting time, local time. */
+/** Start of a hunt: its day at the meeting time, Paris time. */
 export function huntStart(date: string, meetingTime: string): Date {
-  const [hours, minutes] = meetingTime.split(':').map(Number);
-  return set(fromDateKey(date), { hours, minutes, seconds: 0, milliseconds: 0 });
+  return parisToUtc(date, meetingTime);
 }
 
 export const messages = {
@@ -69,7 +63,7 @@ export const messages = {
  * `takenDates`: days that already have a hunt (at most one hunt per day).
  */
 export function createHuntFormSchema({ takenDates, now }: { takenDates: string[]; now: Date }) {
-  const today = toDateKey(now);
+  const today = parisDay(now);
   // Every rule is checked in one pass, so the organizer sees all the errors at once.
   return z
     .object({
