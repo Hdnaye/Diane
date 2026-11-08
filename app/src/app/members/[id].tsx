@@ -81,7 +81,7 @@ function MemberEditor({ member, onRemove }: { member: Member; onRemove: () => Pr
     <>
       <MemberForm
         defaultValues={memberFormValues(member)}
-        submitLabel="Enregistrer les modifications"
+        submitLabel="Enregistrer"
         onSubmit={async (changes) => {
           await updateMember.mutateAsync({ id: member.id, member: changes });
           backToMembers();
@@ -95,7 +95,7 @@ function MemberEditor({ member, onRemove }: { member: Member; onRemove: () => Pr
               supprimées.
             </Text>
             <Button variant="danger" disabled={busy} onPress={() => run(onRemove, REMOVE_FAILED)}>
-              <Text>Oui, supprimer définitivement</Text>
+              <Text>Oui, supprimer</Text>
             </Button>
             {member.active && (
               <>
