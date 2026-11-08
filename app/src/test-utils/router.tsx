@@ -39,9 +39,9 @@ export async function renderScreens(
 export function aHunt(overrides: Partial<Hunt> & Pick<Hunt, 'date'>): Hunt {
   return {
     id: `hunt-${overrides.date}`,
-    meetingTime: '08:00',
-    maxParticipants: null,
-    responseDeadline: new Date(2026, 10, 1, 20, 0).toISOString(),
+    meeting_time: '08:00',
+    max_participants: null,
+    response_deadline: '2026-11-01T19:00:00.000Z',
     ...overrides,
   };
 }

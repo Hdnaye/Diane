@@ -97,9 +97,9 @@ export function createHuntFormSchema({ takenDates, now }: { takenDates: string[]
     })
     .transform((values): NewHunt => ({
       date: values.date,
-      meetingTime: values.meetingTime,
-      maxParticipants: values.maxParticipants === '' ? null : Number(values.maxParticipants),
-      responseDeadline: values.responseDeadline.toISOString(),
+      meeting_time: values.meetingTime,
+      max_participants: values.maxParticipants === '' ? null : Number(values.maxParticipants),
+      response_deadline: values.responseDeadline.toISOString(),
     }));
 }
 

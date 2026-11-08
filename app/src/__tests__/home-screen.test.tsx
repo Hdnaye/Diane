@@ -13,8 +13,8 @@ const TODAY = new Date('2026-11-07T09:00:00Z');
 
 const HUNTS = [
   aHunt({ date: '2026-10-31' }),
-  aHunt({ date: '2026-11-21', meetingTime: '07:30' }),
-  aHunt({ date: '2026-11-14', meetingTime: '08:00', maxParticipants: 12 }),
+  aHunt({ date: '2026-11-21', meeting_time: '07:30' }),
+  aHunt({ date: '2026-11-14', meeting_time: '08:00', max_participants: 12 }),
 ];
 
 function NewHuntStub() {

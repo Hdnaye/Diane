@@ -72,9 +72,9 @@ describe('NewHuntScreen', () => {
     expect(await repository.list()).toEqual([
       expect.objectContaining({
         date: '2026-11-20',
-        meetingTime: '07:15',
-        maxParticipants: 15,
-        responseDeadline: '2026-11-09T19:00:00.000Z',
+        meeting_time: '07:15',
+        max_participants: 15,
+        response_deadline: '2026-11-09T19:00:00.000Z',
       }),
     ]);
   });
@@ -87,7 +87,7 @@ describe('NewHuntScreen', () => {
 
     expect(await screen.findByRole('heading', { name: 'vendredi 20 novembre' })).toBeOnTheScreen();
     expect(await repository.list()).toEqual([
-      expect.objectContaining({ date: '2026-11-20', maxParticipants: null }),
+      expect.objectContaining({ date: '2026-11-20', max_participants: null }),
     ]);
   });
 
@@ -179,7 +179,7 @@ describe('NewHuntScreen', () => {
     expect(await repository.list()).toContainEqual(
       expect.objectContaining({
         date: '2026-11-08',
-        responseDeadline: '2026-11-07T19:00:00.000Z',
+        response_deadline: '2026-11-07T19:00:00.000Z',
       })
     );
   });
@@ -226,7 +226,7 @@ describe('NewHuntScreen', () => {
     expect(await repository.list()).toContainEqual(
       expect.objectContaining({
         date: '2026-11-08',
-        responseDeadline: '2026-11-08T06:00:00.000Z',
+        response_deadline: '2026-11-08T06:00:00.000Z',
       })
     );
   });

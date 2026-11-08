@@ -10,9 +10,9 @@ function demoHunts() {
   return [firstSaturday, addDays(firstSaturday, 7)].map((day, index) => ({
     id: `demo-${index + 1}`,
     date: toDateKey(day),
-    meetingTime: '08:00',
-    maxParticipants: index === 0 ? 12 : null,
-    responseDeadline: addHours(set(day, { hours: 8, minutes: 0 }), -48).toISOString(),
+    meeting_time: '08:00',
+    max_participants: index === 0 ? 12 : null,
+    response_deadline: addHours(set(day, { hours: 8, minutes: 0 }), -48).toISOString(),
   }));
 }
 
