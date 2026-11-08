@@ -25,6 +25,11 @@ const {
  */
 const DEFAULT_DEADLINE_DAYS = 2;
 const DEFAULT_DEADLINE_TIME = "20:00";
+/**
+ * A default deadline leaves at least this delay to answer after the sending
+ * (user decision): otherwise the organizer sets the deadline.
+ */
+const MIN_DEFAULT_DEADLINE_DELAY_MS = 2 * 60 * 60 * 1000;
 
 /**
  * @typedef {object} Hunt
@@ -67,7 +72,8 @@ function addDays(day, days) {
  * times):
  * - the sending day + 2 days at 20:00, if strictly before the hunt starts
  *   (sent on Sunday 11:00 -> Tuesday 20:00);
- * - else the day before the hunt at 20:00, if still ahead;
+ * - else the day before the hunt at 20:00, if at least 2 hours ahead
+ *   (MIN_DEFAULT_DEADLINE_DELAY_MS);
  * - else none (null): the organizer must set one.
  *
  * @param {{ date: string, meeting_time: string }} hunt
@@ -82,7 +88,10 @@ function defaultDeadline(hunt, now) {
   );
   if (dayPlus2.getTime() < start) return toPocketBaseDate(dayPlus2);
   const dayBefore = parisToUtc(addDays(hunt.date, -1), DEFAULT_DEADLINE_TIME);
-  if (dayBefore.getTime() > now.getTime() && dayBefore.getTime() < start) {
+  if (
+    dayBefore.getTime() - now.getTime() >= MIN_DEFAULT_DEADLINE_DELAY_MS &&
+    dayBefore.getTime() < start
+  ) {
     return toPocketBaseDate(dayBefore);
   }
   return null;
@@ -152,7 +161,7 @@ function sendPlan(hunt, now) {
       ok: false,
       code: "deadline_missing",
       message:
-        "La battue est trop proche pour une date limite par défaut (la veille à 20h00 est passée) : fixez une date limite de réponse.",
+        "La battue est trop proche pour une date limite par défaut (la veille à 20h00 est passée ou dans moins de 2 h) : fixez une date limite de réponse.",
     };
   }
   return { ok: true, deadline: byDefault };
@@ -316,6 +325,7 @@ module.exports = {
   publicAnswerView,
   invitationMessages,
   STALE_SENDING_MS,
+  MIN_DEFAULT_DEADLINE_DELAY_MS,
   channelsToResend,
   sendSummary,
 };

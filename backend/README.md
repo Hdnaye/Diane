@@ -92,11 +92,12 @@ Routes (`pb_hooks/send-invitations.pb.js`, `pb_hooks/web-answers.pb.js`):
   (`defaultDeadline` in `pb_hooks/lib/invitations.cjs`, Paris times): the
   sending day + 2 days at 20:00 if strictly before the hunt (sent on Sunday
   morning or Sunday 23:00 -> Tuesday 20:00), else the day before the hunt
-  at 20:00 if still ahead, else none (`deadline_missing`).
+  at 20:00 if at least 2 hours ahead (user decision: time to answer), else
+  none (`deadline_missing`: the organizer sets the deadline).
   Answers `{ invited, sms: { sent, failed, skipped }, email: {...} }`;
   refusals are 409 with `data.hunt.code` = `hunt_cancelled`, `hunt_closed`,
   `deadline_passed` or `deadline_missing` (no deadline, and the day before
-  the hunt at 20:00 has passed), 503 when `DIANE_PUBLIC_URL` is missing.
+  the hunt at 20:00 has passed or is less than 2 hours away), 503 when `DIANE_PUBLIC_URL` is missing.
 - `POST /api/diane/hunts/{id}/resend-failed` (organizer): sends again, per
   channel, for invitations still `pending` of active members, the SMS /
   e-mails recorded as `failed` (e.g. gateway phone switched off), left
