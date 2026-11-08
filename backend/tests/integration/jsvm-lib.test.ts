@@ -91,7 +91,9 @@ routerAdd("POST", "/api/test/invitations", (e) => {
   const at = new Date(now);
   return e.json(200, {
     links: urls.map((url) => lib.answerLink(url, "abc")),
-    deadlines: instants.map((instant) => lib.defaultDeadline(new Date(instant))),
+    deadlines: instants.map(([instant, date, meeting_time]) =>
+      lib.defaultDeadline({ date, meeting_time }, new Date(instant)),
+    ),
     hunts: hunts.map((hunt) => ({
       plan: lib.sendPlan(hunt, at),
       refusal: lib.answerRefusal(hunt, at),
@@ -278,14 +280,22 @@ const INVITATION_HUNTS = [
     status: "closed",
   },
 ];
-/** Sending times around midnight, daylight saving switches and year ends. */
-const DEADLINE_INSTANTS = [
-  "2026-11-08T22:59:00.000Z",
-  "2026-11-08T23:30:00.000Z",
-  "2026-03-27T12:00:00.000Z",
-  "2026-10-23T22:30:00.000Z",
-  "2026-12-30T15:00:00.000Z",
-  "2028-02-27T12:00:00.000Z",
+/**
+ * Sending times and hunts around midnight, daylight saving switches, year
+ * ends, and the day + 2 / day before / none rules.
+ */
+const DEADLINE_INSTANTS: [string, string, string][] = [
+  ["2026-11-08T22:59:00.000Z", "2027-06-01", "08:00"],
+  ["2026-11-08T23:30:00.000Z", "2027-06-01", "08:00"],
+  ["2026-03-27T12:00:00.000Z", "2026-03-29", "08:00"],
+  ["2026-03-27T12:00:00.000Z", "2026-04-01", "08:00"],
+  ["2026-10-23T22:30:00.000Z", "2026-10-25", "08:00"],
+  ["2026-10-23T10:00:00.000Z", "2026-10-26", "08:00"],
+  ["2026-12-30T15:00:00.000Z", "2027-01-01", "20:00"],
+  ["2028-02-27T12:00:00.000Z", "2028-03-01", "08:00"],
+  ["2026-11-08T10:00:00.000Z", "2026-11-09", "08:00"],
+  ["2026-11-08T19:30:00.000Z", "2026-11-09", "08:00"],
+  ["2026-11-08T10:00:00.000Z", "2026-11-08", "18:00"],
 ];
 const PUBLIC_URLS = [
   "https://diane.example.org/",
@@ -557,8 +567,8 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
       }),
     ).toStrictEqual({
       links: PUBLIC_URLS.map((url) => invitations.answerLink(url, "abc")),
-      deadlines: DEADLINE_INSTANTS.map((instant) =>
-        invitations.defaultDeadline(new Date(instant)),
+      deadlines: DEADLINE_INSTANTS.map(([instant, date, meeting_time]) =>
+        invitations.defaultDeadline({ date, meeting_time }, new Date(instant)),
       ),
       hunts: INVITATION_HUNTS.map((hunt) => ({
         plan: invitations.sendPlan(hunt, at),

@@ -54,6 +54,9 @@ describe("answerLink", () => {
 });
 
 describe("defaultDeadline", () => {
+  /** A hunt far enough for the day + 2 rule. */
+  const FAR = { date: "2027-06-01", meeting_time: "08:00" };
+
   it.each([
     // Sunday 11:00 Paris (CET) -> Tuesday 20:00 Paris.
     ["2026-11-08T10:00:00.000Z", "2026-11-10 19:00:00.000Z"],
@@ -68,9 +71,68 @@ describe("defaultDeadline", () => {
     ["2026-03-27T12:00:00.000Z", "2026-03-29 18:00:00.000Z"],
     // Across a month and a year.
     ["2026-12-30T15:00:00.000Z", "2027-01-01 19:00:00.000Z"],
-  ])("from %s is %s", (now, expected) => {
-    expect(defaultDeadline(new Date(now))).toBe(expected);
+  ])("from %s is day + 2 at 20:00 Paris: %s", (now, expected) => {
+    expect(defaultDeadline(FAR, new Date(now))).toBe(expected);
   });
+
+  // Sent on Sunday 2026-11-08 at 11:00 Paris (NOW).
+  it.each([
+    // In 3 days: day + 2 (Tuesday 20:00) is before the hunt.
+    ["2026-11-11", "08:00", "2026-11-10 19:00:00.000Z"],
+    // Day + 2 at 20:01: day + 2 at 20:00 is strictly before.
+    ["2026-11-10", "20:01", "2026-11-10 19:00:00.000Z"],
+    // Day + 2 at 20:00 (not strictly before) or early morning: the day
+    // before at 20:00.
+    ["2026-11-10", "20:00", "2026-11-09 19:00:00.000Z"],
+    ["2026-11-10", "06:30", "2026-11-09 19:00:00.000Z"],
+    // Tomorrow: this evening at 20:00.
+    ["2026-11-09", "08:00", "2026-11-08 19:00:00.000Z"],
+  ])("for a hunt on %s at %s is %s", (date, meeting_time, expected) => {
+    expect(defaultDeadline({ date, meeting_time }, NOW)).toBe(expected);
+  });
+
+  it.each([
+    // Today: the day before at 20:00 has passed.
+    ["2026-11-08T10:00:00.000Z", "2026-11-08", "18:00"],
+    // Tomorrow, sent after 20:00 Paris (or exactly at 20:00).
+    ["2026-11-08T19:30:00.000Z", "2026-11-09", "08:00"],
+    ["2026-11-08T19:00:00.000Z", "2026-11-09", "08:00"],
+  ])("from %s for a hunt on %s at %s is none", (now, date, meeting_time) => {
+    expect(defaultDeadline({ date, meeting_time }, new Date(now))).toBeNull();
+  });
+
+  it.each([
+    // Friday in summer time; hunt on the Sunday of the switch to winter
+    // time: the day before (Saturday, CEST) at 20:00.
+    [
+      "2026-10-23T10:00:00.000Z",
+      "2026-10-25",
+      "08:00",
+      "2026-10-24 18:00:00.000Z",
+    ],
+    // Friday in winter time; hunt on the Sunday of the switch to summer
+    // time: the day before (Saturday, CET) at 20:00.
+    [
+      "2026-03-27T12:00:00.000Z",
+      "2026-03-29",
+      "08:00",
+      "2026-03-28 19:00:00.000Z",
+    ],
+    // Day + 2 falls after the switch to winter time (CET).
+    [
+      "2026-10-23T10:00:00.000Z",
+      "2026-10-26",
+      "08:00",
+      "2026-10-25 19:00:00.000Z",
+    ],
+  ])(
+    "across a daylight saving switch (from %s, hunt %s %s) is %s",
+    (now, date, meeting_time, expected) => {
+      expect(defaultDeadline({ date, meeting_time }, new Date(now))).toBe(
+        expected,
+      );
+    },
+  );
 });
 
 describe("sendPlan", () => {
@@ -106,22 +168,28 @@ describe("sendPlan", () => {
     });
   });
 
-  it.each([
-    // The hunt starts before the default deadline, or at the same time.
-    ["2026-11-10", "08:00"],
-    ["2026-11-10", "20:00"],
-  ])(
-    "refuses without deadline when the hunt (%s %s) starts before day + 2, 20:00",
-    (date, meeting_time) => {
-      expect(
-        sendPlan(hunt({ date, meeting_time, response_deadline: "" }), NOW),
-      ).toMatchObject({
-        ok: false,
-        code: "deadline_missing",
-        message: expect.stringMatching(/date limite/),
-      });
-    },
-  );
+  it("sets the day before at 20:00 when day + 2 is too late", () => {
+    expect(
+      sendPlan(hunt({ date: "2026-11-10", response_deadline: "" }), NOW),
+    ).toStrictEqual({ ok: true, deadline: "2026-11-09 19:00:00.000Z" });
+  });
+
+  it("refuses without deadline when the day before at 20:00 has passed", () => {
+    expect(
+      sendPlan(
+        hunt({
+          date: "2026-11-08",
+          meeting_time: "18:00",
+          response_deadline: "",
+        }),
+        NOW,
+      ),
+    ).toMatchObject({
+      ok: false,
+      code: "deadline_missing",
+      message: expect.stringMatching(/date limite/),
+    });
+  });
 
   it("accepts without deadline a hunt starting after day + 2, 20:00", () => {
     expect(

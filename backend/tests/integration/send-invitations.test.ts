@@ -307,9 +307,10 @@ describe("send invitations", () => {
       token: pb.organizerToken,
     });
     // Sending may cross midnight (Paris) during the request.
-    expect([defaultDeadline(start), defaultDeadline(new Date())]).toContain(
-      updated.body.response_deadline,
-    );
+    expect([
+      defaultDeadline(hunt, start),
+      defaultDeadline(hunt, new Date()),
+    ]).toContain(updated.body.response_deadline);
   });
 
   it("adds the day line only for members with several open invitations", async () => {
