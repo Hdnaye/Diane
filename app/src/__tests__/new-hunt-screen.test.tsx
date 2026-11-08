@@ -57,8 +57,10 @@ describe('NewHuntScreen', () => {
     await user.press(screen.getByRole('button', { name: 'Créer une battue' }));
     expect(await screen.findByText('Jour choisi : vendredi 20 novembre')).toBeOnTheScreen();
 
-    await user.press(screen.getByRole('button', { name: 'Rendez-vous : une heure plus tôt' }));
-    await user.press(screen.getByRole('button', { name: 'Rendez-vous : 15 minutes plus tard' }));
+    await user.press(screen.getByRole('button', { name: '− 1 h, rendez-vous une heure plus tôt' }));
+    await user.press(
+      screen.getByRole('button', { name: '+ 15 min, rendez-vous 15 minutes plus tard' })
+    );
     expect(screen.getByText('7 h 15')).toBeOnTheScreen();
     await user.type(screen.getByLabelText('Nombre maximum de participants (facultatif)'), '15');
     await submit(user);
@@ -179,18 +181,24 @@ describe('NewHuntScreen', () => {
     const { repository } = await openForm('?date=2026-11-08');
     expect(await screen.findByText('samedi 7 novembre à 20 h 00')).toBeOnTheScreen();
 
-    await user.press(screen.getByRole('button', { name: 'Date limite : un jour plus tard' }));
+    await user.press(
+      screen.getByRole('button', { name: '+ 1 jour, date limite un jour plus tard' })
+    );
     await submit(user);
     expect(
       await screen.findByText('La date limite de réponse doit être avant la battue.')
     ).toBeOnTheScreen();
 
     for (let i = 0; i < 13; i++) {
-      await user.press(screen.getByRole('button', { name: 'Date limite : une heure plus tôt' }));
+      await user.press(
+        screen.getByRole('button', { name: '− 1 h, date limite une heure plus tôt' })
+      );
     }
     expect(screen.getByText('dimanche 8 novembre à 7 h 00')).toBeOnTheScreen();
     // A deadline changed by hand is kept when the meeting time changes.
-    await user.press(screen.getByRole('button', { name: 'Rendez-vous : une heure plus tard' }));
+    await user.press(
+      screen.getByRole('button', { name: '+ 1 h, rendez-vous une heure plus tard' })
+    );
     expect(screen.getByText('dimanche 8 novembre à 7 h 00')).toBeOnTheScreen();
     await submit(user);
 
@@ -208,7 +216,9 @@ describe('NewHuntScreen', () => {
     await openForm('?date=2026-11-20');
 
     for (let i = 0; i < 3; i++) {
-      await user.press(screen.getByRole('button', { name: 'Date limite : un jour plus tôt' }));
+      await user.press(
+        screen.getByRole('button', { name: '− 1 jour, date limite un jour plus tôt' })
+      );
     }
     await submit(user);
 
