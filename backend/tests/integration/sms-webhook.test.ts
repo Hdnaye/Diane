@@ -171,20 +171,22 @@ describe("incoming SMS webhook", () => {
       );
       expect(response.status).toBe(401);
 
+      // Other tests log their own skew (e.g. 600 s): find this one.
+      const near1000 = (log: { data: Record<string, unknown> }) =>
+        Math.abs(Number(log.data.skew_s) - 1000) <= 5;
       let logs: { message: string; data: Record<string, unknown> }[] = [];
-      for (let i = 0; i < 100 && logs.length === 0; i++) {
+      for (let i = 0; i < 100 && !logs.some(near1000); i++) {
         const found = await pb.api(
-          `/api/logs?filter=${encodeURIComponent("message~'clock skew'")}`,
+          `/api/logs?perPage=500&filter=${encodeURIComponent("message~'clock skew'")}`,
           { token: pb.superuserToken },
         );
         logs = found.body.items;
-        if (logs.length === 0) await new Promise((r) => setTimeout(r, 100));
+        if (!logs.some(near1000)) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
       }
 
-      expect(logs).toHaveLength(1);
-      const skew = Number(logs[0]?.data.skew_s);
-      expect(skew).toBeGreaterThanOrEqual(995);
-      expect(skew).toBeLessThanOrEqual(1005);
+      expect(logs.filter(near1000)).toHaveLength(1);
       expect(JSON.stringify(logs)).not.toContain(member.phone);
     }, 20_000);
 
