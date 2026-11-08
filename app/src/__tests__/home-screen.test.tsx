@@ -169,11 +169,14 @@ describe('HomeScreen', () => {
       expect(screen.getByRole('heading', { name: 'Diane' })).toBeOnTheScreen();
       expect(screen.getByText('novembre 2026', { includeHiddenElements: true })).toBeOnTheScreen();
       expect(screen.queryByText('Aucune battue prévue.')).not.toBeOnTheScreen();
+      // Creating a hunt would fail: not offered until the server answers.
+      expect(screen.getByRole('button', { name: 'Créer une battue' })).toBeDisabled();
 
       await user.press(screen.getByRole('button', { name: 'Réessayer' }));
 
       expect(await screen.findByRole('heading', { name: 'samedi 14 novembre' })).toBeOnTheScreen();
       expect(screen.queryByText(CONNECTION_ERROR)).not.toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Créer une battue' })).toBeEnabled();
     });
 
     it('says when the server address or the key is not configured', async () => {
