@@ -122,7 +122,7 @@ routerAdd("POST", "/api/test/transports", (e) => {
     config,
     base64: texts.map((text) => lib.base64(text)),
     requests: texts.map((text) =>
-      lib.gatewayRequest(config.sms, { to: "+33639981000", text }),
+      lib.gatewayRequest(config.sms, { to: "+33639981000", text, id: "rem-abc" }),
     ),
   });
 });
@@ -770,7 +770,11 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
       config,
       base64: TRANSPORT_TEXTS.map((text) => transports.base64(text)),
       requests: TRANSPORT_TEXTS.map((text) =>
-        transports.gatewayRequest(config.sms, { to: "+33639981000", text }),
+        transports.gatewayRequest(config.sms, {
+          to: "+33639981000",
+          text,
+          id: "rem-abc",
+        }),
       ),
     });
   });

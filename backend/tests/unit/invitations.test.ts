@@ -367,6 +367,12 @@ describe("channelsToResend", () => {
     updated = "2026-11-08 09:59:00.000Z",
   ) => ({ sms_status, email_status, updated });
 
+  it("resends channels not sent: the gateway was unreachable during the sending", () => {
+    expect(
+      channelsToResend(invitation("not_sent", "sent"), context),
+    ).toStrictEqual({ sms: true, email: false });
+  });
+
   it("resends failed channels only", () => {
     expect(
       channelsToResend(invitation("failed", "sent"), context),
@@ -427,11 +433,12 @@ describe("sendSummary", () => {
         { sms_status: "sent", email_status: "skipped" },
         { sms_status: "failed", email_status: "sent" },
         { sms_status: "sent", email_status: "sent" },
+        { sms_status: "not_sent", email_status: "sent" },
       ]),
     ).toStrictEqual({
-      invited: 3,
-      sms: { sent: 2, failed: 1, skipped: 0 },
-      email: { sent: 2, failed: 0, skipped: 1 },
+      invited: 4,
+      sms: { sent: 2, failed: 1, skipped: 0, not_sent: 1 },
+      email: { sent: 3, failed: 0, skipped: 1, not_sent: 0 },
     });
   });
 });

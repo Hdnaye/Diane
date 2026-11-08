@@ -20,6 +20,8 @@ export interface OutboxMessage {
   to: string;
   text: string;
   subject?: string;
+  /** Message id given to the SMS gateway (duplicates rejected). */
+  id?: string;
 }
 
 export interface TestInstance {

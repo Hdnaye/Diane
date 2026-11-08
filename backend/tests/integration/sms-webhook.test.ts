@@ -222,6 +222,9 @@ describe("incoming SMS webhook", () => {
       });
       const sms = await newSms(member.phone);
       expect(sms).toHaveLength(1);
+      // Id of the handled webhook record: a retried sending is rejected by
+      // the gateway as a duplicate.
+      expect(sms[0]?.id).toMatch(/^cnf-[a-z0-9]{15}$/);
       expect(sms[0]?.text).toMatch(
         /^Présence OUI enregistrée pour la battue du \w+ \d+(er)? \w+\. Pour changer, renvoyez OUI \d+ ou NON \d+ avant le /,
       );

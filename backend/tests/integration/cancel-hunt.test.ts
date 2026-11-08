@@ -109,8 +109,8 @@ describe("cancel a hunt", () => {
     expect(response.status).toBe(200);
     expect(response.body).toStrictEqual({
       notified: 3,
-      sms: { sent: 3, failed: 0, skipped: 0 },
-      email: { sent: 3, failed: 0, skipped: 0 },
+      sms: { sent: 3, failed: 0, skipped: 0, not_sent: 0 },
+      email: { sent: 3, failed: 0, skipped: 0, not_sent: 0 },
     });
     const cancelled = await record("hunts", hunt.id);
     expect(cancelled.status).toBe("cancelled");
@@ -119,6 +119,7 @@ describe("cancel a hunt", () => {
       const messages = await messagesTo(member);
       expect(messages).toHaveLength(2);
       const sms = messages.find((message) => message.kind === "sms");
+      expect(sms?.id).toBe(`can-${invitation.id}`);
       expect(sms?.text).toMatch(
         /^La battue du \w+ \d+(er)? \w+ à 8h00 est annulée\.$/,
       );
@@ -146,8 +147,8 @@ describe("cancel a hunt", () => {
     expect(again.status).toBe(200);
     expect(again.body).toStrictEqual({
       notified: 0,
-      sms: { sent: 0, failed: 0, skipped: 0 },
-      email: { sent: 0, failed: 0, skipped: 0 },
+      sms: { sent: 0, failed: 0, skipped: 0, not_sent: 0 },
+      email: { sent: 0, failed: 0, skipped: 0, not_sent: 0 },
     });
     expect(await messagesTo(member)).toHaveLength(2);
   });
@@ -185,6 +186,7 @@ describe("cancel a hunt", () => {
       sent: 0,
       failed: 0,
       skipped: 1,
+      not_sent: 0,
     });
   });
 

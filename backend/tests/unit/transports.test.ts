@@ -109,6 +109,24 @@ describe("gatewayRequest", () => {
     });
   });
 
+  it("gives the gateway the message id, so that it rejects a duplicate", () => {
+    const request = gatewayRequest(
+      {
+        kind: "gateway",
+        url: "http://192.168.1.50:8080",
+        username: "sms",
+        password: "secret",
+      },
+      { to: PHONE, text: "Bonjour", id: "rem-abc123def456ghi" },
+    );
+
+    expect(JSON.parse(request.body)).toStrictEqual({
+      id: "rem-abc123def456ghi",
+      textMessage: { text: "Bonjour" },
+      phoneNumbers: [PHONE],
+    });
+  });
+
   it("works with the cloud server URL", () => {
     expect(
       gatewayRequest(
@@ -440,14 +458,41 @@ describe("deliver", () => {
     ];
   };
 
-  it("tells a timeout (the SMS may have been sent) from a failure", () => {
+  it("reports a timeout as a failure (safe to resend: same message id)", () => {
     const timeout = () => {
       throw new Error(
         'Post "http://192.168.1.50:8080/messages": context deadline exceeded (Client.Timeout exceeded while awaiting headers)',
       );
     };
     // The next SMS of the sending are not attempted (gateway unreachable).
-    expect(kindOf(timeout)).toStrictEqual(["timeout", "not_attempted"]);
+    expect(kindOf(timeout)).toStrictEqual(["failed", "not_attempted"]);
+  });
+
+  it("reports a duplicate rejected by the gateway (409) as sent", () => {
+    const transports = createTransports(
+      gatewayConfig(),
+      fakeIo({ httpSend: () => ({ statusCode: 409 }) }).io,
+    );
+
+    expect(
+      deliver(transports.sms, { to: PHONE, text: "x", id: "inv-1" }),
+    ).toStrictEqual({ status: "sent", error: "", kind: "" });
+  });
+
+  it("reports SMS not attempted (gateway unreachable) as not sent", () => {
+    const transports = createTransports(
+      gatewayConfig(),
+      fakeIo({
+        httpSend: () => {
+          throw new Error("dial tcp: connect: connection refused");
+        },
+      }).io,
+    );
+    deliver(transports.sms, { to: PHONE, text: "x" });
+
+    expect(
+      deliver(transports.sms, { to: "+33639981001", text: "y" }),
+    ).toMatchObject({ status: "not_sent", kind: "not_attempted" });
   });
 
   it("reports a connection that could not be made as a failure (not sent)", () => {
@@ -471,14 +516,14 @@ describe("deliver", () => {
     ]);
   });
 
-  it("reports a gateway not configured as not attempted", () => {
+  it("reports a gateway not configured as a failure (to fix)", () => {
     expect(kindOf(() => ({ statusCode: 202 }), { url: "" })).toStrictEqual([
-      "not_attempted",
-      "not_attempted",
+      "failed",
+      "failed",
     ]);
   });
 
-  it("reports SMTP not configured as not attempted, an SMTP error as a failure", () => {
+  it("reports SMTP not configured or in error as a failure", () => {
     const disabled = createTransports(
       gatewayConfig(),
       fakeIo({ smtpEnabled: false }).io,
@@ -493,7 +538,7 @@ describe("deliver", () => {
     );
     const message = { to: EMAIL, subject: "s", text: "t" };
 
-    expect(deliver(disabled.email, message).kind).toBe("not_attempted");
+    expect(deliver(disabled.email, message).kind).toBe("failed");
     expect(deliver(broken.email, message).kind).toBe("failed");
   });
 });

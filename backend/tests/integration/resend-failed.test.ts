@@ -166,8 +166,8 @@ describe("resend failed invitations", () => {
     expect(response.status).toBe(200);
     expect(response.body).toStrictEqual({
       invited: 2,
-      sms: { sent: 2, failed: 0, skipped: 0 },
-      email: { sent: 1, failed: 0, skipped: 0 },
+      sms: { sent: 2, failed: 0, skipped: 0, not_sent: 0 },
+      email: { sent: 1, failed: 0, skipped: 0, not_sent: 0 },
     });
     expect(await invitationOf(hunt.id, both.id)).toMatchObject({
       sms_status: "sent",
@@ -201,8 +201,8 @@ describe("resend failed invitations", () => {
 
     expect(response.body).toStrictEqual({
       invited: 1,
-      sms: { sent: 0, failed: 0, skipped: 0 },
-      email: { sent: 1, failed: 0, skipped: 0 },
+      sms: { sent: 0, failed: 0, skipped: 0, not_sent: 0 },
+      email: { sent: 1, failed: 0, skipped: 0, not_sent: 0 },
     });
     expect(smsTo(member.phone as string)).toHaveLength(1);
     expect(mailsTo(member.email as string)).toHaveLength(1);
@@ -218,8 +218,8 @@ describe("resend failed invitations", () => {
     expect(response.status).toBe(200);
     expect(response.body).toStrictEqual({
       invited: 0,
-      sms: { sent: 0, failed: 0, skipped: 0 },
-      email: { sent: 0, failed: 0, skipped: 0 },
+      sms: { sent: 0, failed: 0, skipped: 0, not_sent: 0 },
+      email: { sent: 0, failed: 0, skipped: 0, not_sent: 0 },
     });
     expect(smsTo(member.phone as string)).toHaveLength(2);
     expect(mailsTo(member.email as string)).toHaveLength(1);
@@ -235,8 +235,8 @@ describe("resend failed invitations", () => {
 
       expect(response.body).toStrictEqual({
         invited: 1,
-        sms: { sent: 0, failed: 1, skipped: 0 },
-        email: { sent: 1, failed: 0, skipped: 0 },
+        sms: { sent: 0, failed: 1, skipped: 0, not_sent: 0 },
+        email: { sent: 1, failed: 0, skipped: 0, not_sent: 0 },
       });
     } finally {
       gateway.answerWith(202);
@@ -330,8 +330,8 @@ describe("resend failed invitations", () => {
 
     expect(response.body).toStrictEqual({
       invited: 1,
-      sms: { sent: 1, failed: 0, skipped: 0 },
-      email: { sent: 1, failed: 0, skipped: 0 },
+      sms: { sent: 1, failed: 0, skipped: 0, not_sent: 0 },
+      email: { sent: 1, failed: 0, skipped: 0, not_sent: 0 },
     });
     expect(await invitationOf(hunt.id, member.id)).toMatchObject({
       sms_status: "sent",
@@ -348,7 +348,12 @@ describe("resend failed invitations", () => {
 
     const response = await resend(hunt.id);
 
-    expect(response.body.sms).toStrictEqual({ sent: 1, failed: 0, skipped: 0 });
+    expect(response.body.sms).toStrictEqual({
+      sent: 1,
+      failed: 0,
+      skipped: 0,
+      not_sent: 0,
+    });
     expect(await invitationOf(hunt.id, member.id)).toMatchObject({
       sms_status: "sent",
       email_status: "sent",
@@ -434,4 +439,31 @@ describe("resend failed invitations", () => {
       });
     });
   });
+
+  it("resends an invitation SMS that timed out without duplicate", async () => {
+    const member = await newMember({ email: "" });
+    const hunt = await newHunt();
+    gateway.delayAnswers(6000);
+    try {
+      await send(hunt.id);
+    } finally {
+      gateway.delayAnswers(0);
+    }
+    const invitation = await invitationOf(hunt.id, member.id);
+    expect(invitation.sms_status).toBe("failed");
+
+    const response = await resend(hunt.id);
+
+    expect(response.body.sms).toMatchObject({ sent: 1, failed: 0 });
+    expect(
+      smsTo(member.phone as string).map(
+        (request) => (request.body as { id: string }).id,
+      ),
+    ).toStrictEqual([`inv-${invitation.id}`, `inv-${invitation.id}`]);
+    expect(
+      gateway.accepted.filter((request) =>
+        JSON.stringify(request.body).includes(member.phone as string),
+      ),
+    ).toHaveLength(1);
+  }, 30_000);
 });

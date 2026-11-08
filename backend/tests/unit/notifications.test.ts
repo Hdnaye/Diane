@@ -222,13 +222,10 @@ describe("noticeChannelsToSend", () => {
     ).toStrictEqual({ sms: false, email: false });
   });
 
-  it("never resends a notice that may have been sent (timeout)", () => {
+  it("resends a notice not sent (gateway unreachable during the run)", () => {
     expect(
-      noticeChannelsToSend(
-        notice({ sms_status: "unknown", email_status: "unknown" }),
-        { ...context, huntSent: true },
-      ),
-    ).toStrictEqual({ sms: false, email: false });
+      noticeChannelsToSend(notice({ sms_status: "not_sent" }), context),
+    ).toStrictEqual({ sms: true, email: false });
   });
 
   it("sends a notice never sent when asked to", () => {
@@ -239,19 +236,13 @@ describe("noticeChannelsToSend", () => {
 });
 
 describe("noticeRecord", () => {
-  it("records a timeout as unknown (may have been sent), one attempt", () => {
-    expect(
-      noticeRecord({ status: "failed", kind: "timeout" }, 0),
-    ).toStrictEqual({ status: "unknown", attempts: 1 });
-  });
-
   it("counts an attempted failure, not a message never attempted", () => {
     expect(noticeRecord({ status: "failed", kind: "failed" }, 1)).toStrictEqual(
       { status: "failed", attempts: 2 },
     );
     expect(
-      noticeRecord({ status: "failed", kind: "not_attempted" }, 1),
-    ).toStrictEqual({ status: "failed", attempts: 1 });
+      noticeRecord({ status: "not_sent", kind: "not_attempted" }, 1),
+    ).toStrictEqual({ status: "not_sent", attempts: 1 });
   });
 
   it("counts a sent message, not a skipped one", () => {

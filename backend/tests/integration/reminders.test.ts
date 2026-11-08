@@ -153,6 +153,7 @@ describe("reminders", () => {
     expect(email?.text).toContain(
       `${TEST_PUBLIC_URL}/r/${pending.invitation.token}`,
     );
+    expect(sms?.id).toBe(`rem-${pending.invitation.id}`);
     expect(await record("invitations", pending.invitation.id)).toMatchObject({
       reminder_sms_status: "sent",
       reminder_email_status: "sent",
@@ -325,24 +326,66 @@ describe("automatic retries against a real (fake) gateway", () => {
     throw new Error("Reminders still sending");
   }
 
-  it("never resends a reminder that timed out (it may have been sent), and reaches everybody", async () => {
-    const { members, invitations } = await dueHunt(3);
-    // The phone accepts each SMS, but after the 5 s timeout.
+  /** SMS really sent to `member` (accepted by the gateway). */
+  const acceptedTo = (member: ApiRecord) =>
+    gateway.accepted.filter((request) =>
+      JSON.stringify(request.body).includes(member.phone),
+    ).length;
+
+  it("resends a reminder that timed out without duplicate (same id rejected), and reaches everybody", async () => {
+    const { members, invitations } = await dueHunt(2);
+    // The phone takes each SMS, but answers after the 5 s timeout.
     gateway.delayAnswers(6000);
     try {
-      for (let run = 0; run < 4; run++) await runAndSettle(invitations);
+      for (let run = 0; run < 2; run++) await runAndSettle(invitations);
     } finally {
       gateway.delayAnswers(0);
     }
-
-    // Each member got exactly one reminder: the one that timed out is
-    // never retried, the ones cut off (gateway unreachable) come first
-    // on the next run.
-    expect(members.map(smsTo)).toStrictEqual([1, 1, 1]);
     expect(await statuses(invitations)).toStrictEqual(
-      Array(3).fill({ status: "unknown", attempts: 1 }),
+      Array(2).fill({ status: "failed", attempts: 1 }),
     );
+
+    await runAndSettle(invitations);
+
+    // Retried with the same id: the gateway rejects the duplicate (409),
+    // recorded as sent. Each member got one SMS.
+    expect(members.map(acceptedTo)).toStrictEqual([1, 1]);
+    expect(await statuses(invitations)).toStrictEqual(
+      Array(2).fill({ status: "sent", attempts: 2 }),
+    );
+    expect(
+      gateway.requests
+        .filter((request) =>
+          JSON.stringify(request.body).includes(members[0]?.phone ?? "?"),
+        )
+        .map((request) => (request.body as { id: string }).id),
+    ).toStrictEqual([`rem-${invitations[0]?.id}`, `rem-${invitations[0]?.id}`]);
   }, 90_000);
+
+  it("sends the reminders once the unreachable gateway is back", async () => {
+    const { members, invitations } = await dueHunt(3);
+    gateway.setDown(true);
+    try {
+      await runAndSettle(invitations);
+    } finally {
+      gateway.setDown(false);
+    }
+    const before = await statuses(invitations);
+    // One attempt failed, the others not attempted: not sent, retried.
+    expect(before.filter((item) => item.status === "failed")).toStrictEqual([
+      { status: "failed", attempts: 1 },
+    ]);
+    expect(before.filter((item) => item.status === "not_sent")).toStrictEqual(
+      Array(2).fill({ status: "not_sent", attempts: 0 }),
+    );
+
+    await runAndSettle(invitations);
+
+    expect(members.map(acceptedTo)).toStrictEqual([1, 1, 1]);
+    expect(
+      (await statuses(invitations)).map((item) => item.status),
+    ).toStrictEqual(["sent", "sent", "sent"]);
+  }, 60_000);
 
   it("retries a failed reminder at most 3 times", async () => {
     const { members, invitations } = await dueHunt(2);
@@ -354,6 +397,7 @@ describe("automatic retries against a real (fake) gateway", () => {
     }
 
     expect(members.map(smsTo)).toStrictEqual([3, 3]);
+    expect(members.map(acceptedTo)).toStrictEqual([0, 0]);
     expect(await statuses(invitations)).toStrictEqual(
       Array(2).fill({ status: "failed", attempts: 3 }),
     );
