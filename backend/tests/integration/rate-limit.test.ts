@@ -58,7 +58,9 @@ describe("rate limits", () => {
     expect(statuses.filter((status) => status !== 200)).toStrictEqual([]);
   });
 
-  it("still throttles guests creating records", async () => {
+  // Guests are refused before PocketBase's `*:create` limit applies
+  // (pb_hooks/organizer-access.pb.js): they never reach the database.
+  it("refuses guests creating records with a 401, before the create limit", async () => {
     const statuses: number[] = [];
     for (let i = 0; i <= 20; i++) {
       const response = await pb.api(recordsPath("members"), {
@@ -68,8 +70,7 @@ describe("rate limits", () => {
       statuses.push(response.status);
     }
 
-    expect(statuses.slice(0, 20)).not.toContain(429);
-    expect(statuses.at(-1)).toBe(429);
+    expect(new Set(statuses)).toStrictEqual(new Set([401]));
   });
 
   it("throttles a guest hammering the answer routes", async () => {

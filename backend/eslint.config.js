@@ -45,6 +45,11 @@ export default defineConfig(
     ...vitest.configs.recommended,
   },
   {
+    // Members' answer page: plain browser ES modules, no bundler, no Node.
+    files: ["pb_public/**/*.js"],
+    languageOptions: { sourceType: "module", globals: globals.browser },
+  },
+  {
     // Hooks and migrations: plain scripts evaluated by PocketBase.
     files: ["pb_hooks/**/*.js", "pb_migrations/**/*.js"],
     ignores: ["pb_hooks/lib/**"],

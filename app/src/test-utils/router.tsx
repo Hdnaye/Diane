@@ -5,12 +5,14 @@ import type { ComponentType } from 'react';
 
 import { createInMemoryHuntRepository, type HuntRepository } from '@/data/hunt-repository';
 import { HuntRepositoryProvider } from '@/data/hunt-repository-context';
+import { alwaysConnected, type ServerConnection } from '@/data/server-connection';
 import type { Hunt } from '@/data/types';
 
 type Routes = Record<string, ComponentType>;
 
 /**
- * Renders screens in a router with a fresh query client and an in-memory hunt repository,
+ * Renders screens in a router with a fresh query client, an in-memory hunt repository and a
+ * server connection that succeeds (unless given),
  * so each test starts from its own data.
  */
 export async function renderScreens(
@@ -19,13 +21,19 @@ export async function renderScreens(
     initialUrl = '/',
     hunts = [],
     repository = createInMemoryHuntRepository(hunts),
-  }: { initialUrl?: string; hunts?: Hunt[]; repository?: HuntRepository } = {}
+    connection = alwaysConnected,
+  }: {
+    initialUrl?: string;
+    hunts?: Hunt[];
+    repository?: HuntRepository;
+    connection?: ServerConnection;
+  } = {}
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function TestLayout() {
     return (
       <QueryClientProvider client={queryClient}>
-        <HuntRepositoryProvider repository={repository}>
+        <HuntRepositoryProvider repository={repository} connection={connection}>
           <Stack />
         </HuntRepositoryProvider>
       </QueryClientProvider>
@@ -39,9 +47,9 @@ export async function renderScreens(
 export function aHunt(overrides: Partial<Hunt> & Pick<Hunt, 'date'>): Hunt {
   return {
     id: `hunt-${overrides.date}`,
-    meetingTime: '08:00',
-    maxParticipants: null,
-    responseDeadline: new Date(2026, 10, 1, 20, 0).toISOString(),
+    meeting_time: '08:00',
+    max_participants: null,
+    response_deadline: '2026-11-01T19:00:00.000Z',
     ...overrides,
   };
 }

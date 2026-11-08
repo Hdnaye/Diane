@@ -9,11 +9,11 @@ export function HuntCard({ hunt }: { hunt: Hunt }) {
       <CardHeader>
         <CardTitle>{formatLongDay(hunt.date)}</CardTitle>
         <CardDescription className="text-base text-foreground">
-          Rendez-vous à {formatTime(hunt.meetingTime)}
+          Rendez-vous à {formatTime(hunt.meeting_time)}
         </CardDescription>
-        {hunt.maxParticipants !== null && (
+        {hunt.max_participants !== null && (
           <CardDescription className="text-base">
-            {hunt.maxParticipants} places au maximum
+            {hunt.max_participants} places au maximum
           </CardDescription>
         )}
       </CardHeader>

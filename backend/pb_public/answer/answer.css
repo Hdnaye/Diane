@@ -1,0 +1,222 @@
+/*
+ * Members' answer page. Readable theme of the app for elderly members:
+ * large text, tall buttons, strong contrasts.
+ *
+ * Colors copied from app/src/theme/tokens.js (`colors`, the design tokens
+ * of the visual identity): `--name` is colors.name.DEFAULT (or colors.name),
+ * `--name-sub` is colors.name.sub. tests/unit/answer-page-files.test.ts
+ * fails when they differ from the tokens: update both together.
+ * Sizes follow the tokens too (fontSize, spacing "touch-lg", borderRadius).
+ */
+:root {
+  --background: #f7faf9;
+  --foreground: #10231d;
+  --card: #ffffff;
+  --primary: #135e4b;
+  --primary-foreground: #ffffff;
+  --muted-foreground: #3f5a53;
+  --accent-light: #a1d8b5;
+  --border: #ccdcdb;
+  --danger: #b3261e;
+  --danger-foreground: #ffffff;
+  --warning: #8a5300;
+  --warning-foreground: #ffffff;
+  --ring: #135e4b;
+}
+
+/* Atkinson Hyperlegible (SIL Open Font License 1.1, see fonts/OFL.txt). */
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/answer/fonts/AtkinsonHyperlegible-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/answer/fonts/AtkinsonHyperlegible-Bold.ttf") format("truetype");
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+  /* fontSize "base": 20px */
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+.page {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.app-name {
+  margin: 0.5rem 0 1rem;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+.card {
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  margin: 0 0 1rem;
+}
+
+.title {
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  color: var(--foreground);
+}
+
+.eyebrow {
+  display: block;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+.hunt-date {
+  display: block;
+  /* fontSize "4xl" */
+  font-size: 2.5rem;
+  line-height: 3rem;
+  color: var(--primary);
+}
+
+.hunt-time {
+  margin: 0 0 1rem;
+  /* fontSize "2xl" */
+  font-size: 1.75rem;
+  line-height: 2.25rem;
+}
+
+.lead,
+.deadline,
+.current {
+  margin: 0 0 1rem;
+}
+
+.deadline {
+  font-weight: 700;
+}
+
+.current {
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--background);
+  border: 2px solid var(--border);
+}
+
+.notice {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--danger);
+  color: var(--danger-foreground);
+  font-weight: 700;
+}
+
+.answers {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1.5rem 0 1rem;
+}
+
+.button {
+  display: block;
+  width: 100%;
+  /* spacing "touch-lg": 64px */
+  min-height: 4rem;
+  padding: 0.75rem 1rem;
+  border: 3px solid transparent;
+  border-radius: 0.75rem;
+  font: inherit;
+  /* fontSize "2xl" */
+  font-size: 1.75rem;
+  line-height: 2.25rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.button:focus-visible {
+  outline: 4px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.button-primary,
+.button-yes {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.button-no {
+  background: var(--danger);
+  color: var(--danger-foreground);
+}
+
+/* The current answer: a thick ring and a check mark. */
+.button[aria-pressed="true"] {
+  border-color: var(--foreground);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+.button[aria-pressed="true"]::before {
+  content: "\2713  ";
+}
+
+.status:empty {
+  display: none;
+}
+
+.status {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 2px solid var(--primary);
+  background: var(--accent-light);
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.status.is-waiting {
+  border-color: var(--warning);
+  background: var(--warning);
+  color: var(--warning-foreground);
+}
+
+.status.is-error {
+  border-color: var(--danger);
+  background: var(--card);
+  color: var(--danger);
+}

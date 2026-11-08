@@ -100,6 +100,81 @@ describe("pocketbase organizer-upsert", () => {
     expect(withNew).not.toBeNull();
   });
 
+  /** Starts PocketBase on dataDir and logs in, returning the auth token. */
+  async function login(email: string, secret: string): Promise<string> {
+    const server = await startPocketBase({ dataDir });
+    try {
+      const response = await fetch(
+        `${server.url}/api/collections/organizers/auth-with-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ identity: email, password: secret }),
+        },
+      );
+      expect(response.status).toBe(200);
+      return ((await response.json()) as { token: string }).token;
+    } finally {
+      await server.stop();
+    }
+  }
+
+  /** Starts PocketBase on dataDir and tells whether `token` is still valid. */
+  async function isValid(token: string): Promise<boolean> {
+    const server = await startPocketBase({ dataDir });
+    try {
+      const response = await fetch(
+        `${server.url}/api/collections/organizers/auth-refresh`,
+        { method: "POST", headers: { Authorization: token } },
+      );
+      return response.status === 200;
+    } finally {
+      await server.stop();
+    }
+  }
+
+  it("keeps the app's session when run again with the same email and key", async () => {
+    const secret = key();
+    upsert(email, secret);
+    const token = await login(email, secret);
+
+    const result = upsert(email, secret);
+
+    expect(result.status).toBe(0);
+    expect(await isValid(token)).toBe(true);
+    const [auth] = await authenticate([{ email, key: secret }]);
+    expect(auth).not.toBeNull();
+  });
+
+  it("ends the app's session when the key changes", async () => {
+    const secret = key();
+    upsert(email, secret);
+    const token = await login(email, secret);
+
+    const result = upsert(email, key());
+
+    expect(result.status).toBe(0);
+    expect(await isValid(token)).toBe(false);
+  });
+
+  it("ends the app's session when the email changes", async () => {
+    const secret = key();
+    const newEmail = "new-organizer@example.com";
+    upsert(email, secret);
+    const token = await login(email, secret);
+
+    const result = upsert(newEmail, secret);
+
+    expect(result.status).toBe(0);
+    expect(await isValid(token)).toBe(false);
+    const [withOld, withNew] = await authenticate([
+      { email, key: secret },
+      { email: newEmail, key: secret },
+    ]);
+    expect(withOld).toBeNull();
+    expect(withNew).not.toBeNull();
+  });
+
   it("keeps a single account when the email changes", async () => {
     const oldKey = key();
     const newKey = key();

@@ -3,9 +3,9 @@ import type { NewHunt } from '@/data/types';
 
 const hunt = (date: string): NewHunt => ({
   date,
-  meetingTime: '08:00',
-  maxParticipants: null,
-  responseDeadline: '2026-11-09T19:00:00.000Z',
+  meeting_time: '08:00',
+  max_participants: null,
+  response_deadline: '2026-11-09T19:00:00.000Z',
 });
 
 describe('in-memory hunt repository', () => {
@@ -23,7 +23,7 @@ describe('in-memory hunt repository', () => {
   it('creates a hunt with an id and lists it afterwards', async () => {
     const repository = createInMemoryHuntRepository();
 
-    const created = await repository.create({ ...hunt('2026-11-14'), maxParticipants: 12 });
+    const created = await repository.create({ ...hunt('2026-11-14'), max_participants: 12 });
 
     expect(created.id).not.toBe('');
     expect(await repository.list()).toEqual([created]);

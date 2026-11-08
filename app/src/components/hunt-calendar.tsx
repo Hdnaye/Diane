@@ -5,7 +5,8 @@ import { Calendar, type CalendarProps, type DateData } from 'react-native-calend
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { FIRST_DAY_OF_WEEK } from '@/lib/calendar-locale';
-import { formatLongDay, toDateKey } from '@/lib/dates';
+import { formatLongDay } from '@/lib/dates';
+import { parisDay } from '@/lib/paris-time';
 import { cn } from '@/lib/utils';
 import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
 import { remToPx } from '@/theme/units';
@@ -28,9 +29,11 @@ const CALENDAR_THEME = {
   textMonthFontSize: remToPx(fontSize.xl[0]),
   arrowColor: colors.primary.DEFAULT,
   // Replaces the library's whole `dayHeader` style, whose 32 px width on a single line cuts
-  // the day names ("m…") in the readable font.
+  // the day names ("m…") in the readable font. Its margins are kept, as spacing tokens.
   'stylesheet.calendar.header': {
     dayHeader: {
+      marginTop: remToPx(spacing['day-name-top']),
+      marginBottom: remToPx(spacing['day-name-bottom']),
       width: DAY_WIDTH,
       textAlign: 'center',
       fontFamily: fontFamily['sans-bold'][0],
@@ -81,7 +84,7 @@ function DayCell({ date, state, marking, onPress }: DayCellProps) {
   if (!date) {
     return <View className="h-touch-min w-touch-min" />;
   }
-  const isToday = date.dateString === toDateKey(new Date());
+  const isToday = date.dateString === parisDay(new Date());
   const isHunt = Boolean(marking?.marked);
   const isSelected = Boolean(marking?.selected) && !isHunt;
   const isDisabled = isHunt || state === 'disabled';
