@@ -67,8 +67,8 @@ const paul: MemberInput = {
 
 /** Echoes the record sent, as PocketBase would after normalizing it. */
 const echo =
-  (id: string): FakeHandler =>
-  (request) => ({
+  (id: string) =>
+  (request: FakeRequest): FakeResponse => ({
     status: 200,
     body: memberRecord({ id, name: '', ...(request.body as Partial<MembersResponse>) }),
   });
