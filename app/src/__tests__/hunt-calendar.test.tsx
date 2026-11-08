@@ -46,6 +46,18 @@ describe('HuntCalendar', () => {
     }
   });
 
+  it("keeps the space around the day names (the library's margins, from the spacing tokens)", async () => {
+    await render(<HuntCalendar huntDates={[]} onSelectDate={jest.fn()} />);
+
+    // The library's own style has 2 px above and 7 px below, lost when replacing `dayHeader`.
+    for (const name of screen.getAllByText(/^(lun|mar|mer|jeu|ven|sam|dim)\.$/, {
+      includeHiddenElements: true,
+    })) {
+      expect(name).toHaveStyle({ marginTop: remToPx(spacing['day-name-top']) });
+      expect(name).toHaveStyle({ marginBottom: remToPx(spacing['day-name-bottom']) });
+    }
+  });
+
   it('marks today so it can be spotted', async () => {
     await render(<HuntCalendar huntDates={[]} onSelectDate={jest.fn()} />);
 

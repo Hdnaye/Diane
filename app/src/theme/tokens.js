@@ -82,6 +82,9 @@ const spacing = {
   'touch-lg': '4rem',
   touch: '3.5rem',
   'touch-min': '3rem',
+  // Space above / below the calendar's day names (react-native-calendars' own 2px / 7px).
+  'day-name-top': '0.125rem',
+  'day-name-bottom': '0.4375rem',
 };
 
 /** Rounded, soft shapes: cards use "xl", buttons "lg", badges "full". */

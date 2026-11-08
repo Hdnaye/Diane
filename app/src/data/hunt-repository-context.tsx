@@ -1,26 +1,40 @@
 import { createContext, useContext, type ReactNode } from 'react';
 
 import type { HuntRepository } from '@/data/hunt-repository';
+import { alwaysConnected, type ServerConnection } from '@/data/server-connection';
 
-const HuntRepositoryContext = createContext<HuntRepository | null>(null);
+type DataSource = { repository: HuntRepository; connection: ServerConnection };
 
-/** Provides the hunt data source: in memory for now, PocketBase later, a fresh one in tests. */
+const DataSourceContext = createContext<DataSource | null>(null);
+
+/**
+ * Provides the data source: PocketBase in the app (`app-backend.ts`), a fresh in-memory
+ * repository in tests. `connection` is the server connection made once at startup.
+ */
 export function HuntRepositoryProvider({
   repository,
+  connection = alwaysConnected,
   children,
-}: {
-  repository: HuntRepository;
-  children: ReactNode;
-}) {
+}: DataSource & { connection?: ServerConnection; children: ReactNode }) {
   return (
-    <HuntRepositoryContext.Provider value={repository}>{children}</HuntRepositoryContext.Provider>
+    <DataSourceContext.Provider value={{ repository, connection }}>
+      {children}
+    </DataSourceContext.Provider>
   );
 }
 
-export function useHuntRepository(): HuntRepository {
-  const repository = useContext(HuntRepositoryContext);
-  if (!repository) {
-    throw new Error('useHuntRepository must be used inside a HuntRepositoryProvider');
+function useDataSource(): DataSource {
+  const dataSource = useContext(DataSourceContext);
+  if (!dataSource) {
+    throw new Error('Data hooks must be used inside a HuntRepositoryProvider');
   }
-  return repository;
+  return dataSource;
+}
+
+export function useHuntRepository(): HuntRepository {
+  return useDataSource().repository;
+}
+
+export function useServerConnectionSource(): ServerConnection {
+  return useDataSource().connection;
 }

@@ -3,18 +3,20 @@ import { screen } from 'expo-router/testing-library';
 import { Text } from 'react-native';
 
 import HomeScreen from '@/app/index';
+import NewHuntScreen from '@/app/hunts/new';
 import type { HuntRepository } from '@/data/hunt-repository';
+import { ServerConfigMissingError, type ServerConnection } from '@/data/server-connection';
 import type { Hunt } from '@/data/types';
 import { freezeDate, unfreezeDate } from '@/test-utils/clock';
 import { aHunt, renderScreens } from '@/test-utils/router';
 
-// Saturday 7 November 2026, 10:00.
-const TODAY = new Date(2026, 10, 7, 10, 0);
+// Saturday 7 November 2026, 10:00 in Paris (the tests run with the phone in New York).
+const TODAY = new Date('2026-11-07T09:00:00Z');
 
 const HUNTS = [
   aHunt({ date: '2026-10-31' }),
-  aHunt({ date: '2026-11-21', meetingTime: '07:30' }),
-  aHunt({ date: '2026-11-14', meetingTime: '08:00', maxParticipants: 12 }),
+  aHunt({ date: '2026-11-21', meeting_time: '07:30' }),
+  aHunt({ date: '2026-11-14', meeting_time: '08:00', max_participants: 12 }),
 ];
 
 function NewHuntStub() {
@@ -118,5 +120,78 @@ describe('HomeScreen', () => {
 
     expect(await screen.findByText('Formulaire de création')).toBeOnTheScreen();
     expect(screen).toHaveSearchParams({ date: '2026-11-20' });
+  });
+
+  describe('connection to the server', () => {
+    const CONNECTION_ERROR =
+      'Connexion au serveur impossible. Vérifiez la connexion internet, puis réessayez.';
+
+    it('loads the hunts once connected, and connects only once', async () => {
+      const user = userEvent.setup();
+      const connection: ServerConnection = { connect: jest.fn(() => Promise.resolve()) };
+      await renderScreens(
+        { index: HomeScreen, 'hunts/new': NewHuntScreen },
+        { connection, hunts: [aHunt({ date: '2026-11-14' })] }
+      );
+
+      expect(await screen.findByRole('heading', { name: 'samedi 14 novembre' })).toBeOnTheScreen();
+      await user.press(screen.getByRole('button', { name: 'Créer une battue' }));
+      expect(await screen.findByText('Aucun jour choisi')).toBeOnTheScreen();
+
+      expect(connection.connect).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not load the hunts while connecting', async () => {
+      const connection: ServerConnection = { connect: () => new Promise<void>(() => {}) };
+      const repository: HuntRepository = { list: jest.fn(), create: jest.fn() };
+      await renderScreens({ index: HomeScreen }, { connection, repository });
+
+      expect(await screen.findByText('Connexion au serveur…')).toBeOnTheScreen();
+      expect(screen.getByRole('heading', { name: 'Diane' })).toBeOnTheScreen();
+      expect(repository.list).not.toHaveBeenCalled();
+    });
+
+    it('says when the server cannot be reached and lets the organizer retry', async () => {
+      const user = userEvent.setup();
+      const connection: ServerConnection = {
+        connect: jest
+          .fn<Promise<void>, []>()
+          .mockRejectedValueOnce(new Error('network down'))
+          .mockResolvedValue(),
+      };
+      await renderScreens(
+        { index: HomeScreen },
+        { connection, hunts: [aHunt({ date: '2026-11-14' })] }
+      );
+
+      expect(await screen.findByText(CONNECTION_ERROR)).toBeOnTheScreen();
+      // Never an empty screen: the app name and the calendar stay.
+      expect(screen.getByRole('heading', { name: 'Diane' })).toBeOnTheScreen();
+      expect(screen.getByText('novembre 2026', { includeHiddenElements: true })).toBeOnTheScreen();
+      expect(screen.queryByText('Aucune battue prévue.')).not.toBeOnTheScreen();
+      // Creating a hunt would fail: not offered until the server answers.
+      expect(screen.getByRole('button', { name: 'Créer une battue' })).toBeDisabled();
+
+      await user.press(screen.getByRole('button', { name: 'Réessayer' }));
+
+      expect(await screen.findByRole('heading', { name: 'samedi 14 novembre' })).toBeOnTheScreen();
+      expect(screen.queryByText(CONNECTION_ERROR)).not.toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Créer une battue' })).toBeEnabled();
+    });
+
+    it('says when the server address or the key is not configured', async () => {
+      const connection: ServerConnection = {
+        connect: () => Promise.reject(new ServerConfigMissingError()),
+      };
+      await renderScreens({ index: HomeScreen }, { connection });
+
+      expect(await screen.findByText(CONNECTION_ERROR)).toBeOnTheScreen();
+      expect(
+        screen.getByText(
+          "L'adresse du serveur ou la clé de l'organisateur n'est pas configurée (fichier app/.env)."
+        )
+      ).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Réessayer' })).toBeOnTheScreen();
+    });
   });
 });
