@@ -171,9 +171,26 @@ describe("answer page", () => {
       expect(page.$("status").textContent).toContain("liste d'attente"),
     );
     expect(page.$("status").textContent).toContain("La battue est complète");
-    expect(page.visibleText()).toContain(
-      "Votre réponse : je viens (liste d'attente)",
+    expect(page.$("current").textContent).toBe(
+      "Vous êtes sur liste d'attente (pas encore inscrit). Si une place se libère, l'organisateur pourra vous ajouter aux participants.",
     );
+  });
+
+  // A member coming back must not read "je viens" and turn up.
+  it("does not show a waiting list yes as a confirmed place", async () => {
+    const { fetch } = fakeFetch(
+      json(200, view({ participation: "waiting_list", answer: "yes" })),
+    );
+
+    const page = await openPage(fetch);
+
+    expect(page.$("current").textContent).toBe(
+      "Vous êtes sur liste d'attente (pas encore inscrit). Si une place se libère, l'organisateur pourra vous ajouter aux participants.",
+    );
+    expect(page.visibleText()).not.toContain("Votre réponse : je viens");
+    expect(page.$("answer-yes").getAttribute("aria-pressed")).toBe("false");
+    expect(page.$("answer-no").getAttribute("aria-pressed")).toBe("false");
+    expect(page.isShown("answer-yes")).toBe(true);
   });
 
   it("brings the confirmation into view (below the buttons on small phones)", async () => {
@@ -235,7 +252,9 @@ describe("answer page", () => {
     expect(page.visibleText()).toContain(
       "La date limite de réponse est passée (samedi 12 novembre à 20h00).",
     );
-    expect(page.visibleText()).toContain("contactez l'organisateur");
+    expect(page.visibleText()).toContain(
+      "Pour répondre ou changer votre réponse, contactez l'organisateur.",
+    );
     expect(page.visibleText()).toContain("Votre réponse : je ne viens pas");
     expect(page.isShown("answer-yes")).toBe(false);
     expect(page.isShown("answer-no")).toBe(false);
@@ -261,6 +280,24 @@ describe("answer page", () => {
     expect(page.visibleText()).toContain("Cette battue est annulée.");
     expect(page.isShown("answer-yes")).toBe(false);
     expect(page.visibleText()).not.toContain("Répondez avant");
+    // The banner comes first, the meeting time and the answer are gone.
+    expect(
+      page.$("notice").compareDocumentPosition(page.$("hunt-date")) &
+        page.document.defaultView!.Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(page.isShown("hunt-time")).toBe(false);
+    expect(page.visibleText()).not.toContain("Rendez-vous");
+    expect(page.isShown("current")).toBe(false);
+  });
+
+  it("shows the meeting time and the answer again for an open hunt", async () => {
+    const { fetch } = fakeFetch(json(200, view()));
+
+    const page = await openPage(fetch);
+
+    expect(page.isShown("hunt-time")).toBe(true);
+    expect(page.isShown("current")).toBe(true);
+    expect(page.isShown("notice")).toBe(false);
   });
 
   it("tells when the link is unknown", async () => {
@@ -302,8 +339,36 @@ describe("answer page", () => {
       await waitFor(() => expect(page.isShown("answer-yes")).toBe(true));
       expect(page.isShown("error")).toBe(false);
       expect(page.$("hunt-date").textContent).toBe("Lundi 14 novembre");
+      // The retry button is now hidden: the focus goes to the new title.
+      expect(page.document.activeElement).toBe(page.$("hunt-title"));
+      expect(page.$("hunt-title").getAttribute("tabindex")).toBe("-1");
     },
   );
+
+  it("announces the error and moves the focus to it when a retry fails", async () => {
+    const { fetch } = fakeFetch(
+      new TypeError("Failed to fetch"),
+      new TypeError("Failed to fetch"),
+    );
+    const page = await openPage(fetch);
+    expect(page.$("error").getAttribute("role")).toBe("alert");
+
+    (page.$("retry") as HTMLButtonElement).click();
+
+    await waitFor(() =>
+      expect(page.document.activeElement).toBe(page.$("error-title")),
+    );
+    expect(page.$("error-title").getAttribute("tabindex")).toBe("-1");
+    expect(page.visibleText()).toContain("Impossible de joindre le serveur");
+  });
+
+  it("does not move the focus on the first load", async () => {
+    const { fetch } = fakeFetch(json(200, view()));
+
+    const page = await openPage(fetch);
+
+    expect(page.document.activeElement).toBe(page.document.body);
+  });
 
   it("offers to send the answer again when the server is unreachable", async () => {
     const { fetch, calls } = fakeFetch(

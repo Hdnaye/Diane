@@ -48,6 +48,21 @@ describe("answer page", () => {
       }
     });
 
+    it("serves it with a trailing slash too (added by some SMS apps)", async () => {
+      const html = await readFile(path.join(PAGE_DIR, "index.html"), "utf8");
+
+      const response = await get(`/r/${TOKEN}/`);
+      const deeper = await get(`/r/${TOKEN}/more`);
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toMatch(/^text\/html/);
+      expect(await response.text()).toBe(html);
+      expect(response.headers.get("content-security-policy")).toContain(
+        "default-src 'self'",
+      );
+      expect(deeper.status).toBe(404);
+    });
+
     it("sends restrictive security headers", async () => {
       const response = await get(`/r/${TOKEN}`);
 
