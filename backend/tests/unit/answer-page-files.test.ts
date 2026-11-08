@@ -35,6 +35,29 @@ async function pageFiles(): Promise<string[]> {
 
 const CODE_FILES = /\.(html|css|js)$/;
 
+/** References to another site. */
+const EXTERNAL = [
+  /https?:\/\//i,
+  /(src|href)\s*=\s*["']?\/\//i,
+  /url\(\s*["']?\/\//i,
+  /@import/i,
+];
+
+/** The organizer key, its variables, cookies and browser storage. */
+const FORBIDDEN = [
+  /EXPO_PUBLIC/,
+  /DIANE_ORGANIZER/i,
+  /organizer/i,
+  /Authorization/i,
+  /\/api\/collections/,
+  /document\.cookie/,
+  /localStorage|sessionStorage|indexedDB/,
+];
+
+/** The patterns found in `text`. */
+const found = (text: string, patterns: RegExp[]) =>
+  patterns.filter((pattern) => pattern.test(text)).map(String);
+
 type Colors = Record<string, string | Record<string, string>>;
 
 describe("answer page files", () => {
@@ -104,29 +127,20 @@ describe("answer page files", () => {
     it("loads nothing from another site", async () => {
       for (const file of await pageFiles()) {
         if (!CODE_FILES.test(file)) continue;
-        const text = await read(file);
-        expect(text, file).not.toMatch(/https?:\/\//i);
-        expect(text, file).not.toMatch(/(src|href)\s*=\s*["']?\/\//i);
-        expect(text, file).not.toMatch(/url\(\s*["']?\/\//i);
-        expect(text, file).not.toMatch(/@import/i);
+        expect({ file, found: found(await read(file), EXTERNAL) }).toEqual({
+          file,
+          found: [],
+        });
       }
     });
 
     it("never refers to the organizer key, cookies or browser storage", async () => {
       for (const file of await pageFiles()) {
         if (!CODE_FILES.test(file)) continue;
-        const text = await read(file);
-        for (const forbidden of [
-          /EXPO_PUBLIC/,
-          /DIANE_ORGANIZER/i,
-          /organizer/i,
-          /Authorization/i,
-          /\/api\/collections/,
-          /document\.cookie/,
-          /localStorage|sessionStorage|indexedDB/,
-        ]) {
-          expect(text, file).not.toMatch(forbidden);
-        }
+        expect({ file, found: found(await read(file), FORBIDDEN) }).toEqual({
+          file,
+          found: [],
+        });
       }
     });
 

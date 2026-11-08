@@ -68,8 +68,7 @@ async function openPage(
   const visibleText = () => {
     const parts: string[] = [];
     const walk = (element: Element) => {
-      if (element.closest("[hidden]") || element.tagName === "NOSCRIPT")
-        return;
+      if (element.closest("[hidden]") || element.tagName === "NOSCRIPT") return;
       for (const child of element.childNodes) {
         if (child.nodeType === 3) parts.push(child.textContent ?? "");
         else if (child.nodeType === 1) walk(child as Element);
@@ -232,7 +231,10 @@ describe("answer page", () => {
         view({
           hunt: { ...view().hunt, cancelled: true },
           can_answer: false,
-          refusal: { code: "hunt_cancelled", message: "La battue est annulée." },
+          refusal: {
+            code: "hunt_cancelled",
+            message: "La battue est annulée.",
+          },
         }),
       ),
     );
@@ -345,10 +347,7 @@ describe("answer page", () => {
   it("disables the buttons while sending", async () => {
     let release: (response: Response) => void = () => {};
     const pending = new Promise<Response>((resolve) => (release = resolve));
-    const replies = [
-      Promise.resolve(json(200, view())),
-      pending,
-    ];
+    const replies = [Promise.resolve(json(200, view())), pending];
     const page = await openPage(() => replies.shift() as Promise<Response>);
 
     (page.$("answer-yes") as HTMLButtonElement).click();
