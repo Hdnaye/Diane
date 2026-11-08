@@ -1,6 +1,12 @@
 import { createAppBackend } from '@/data/app-backend';
 import { ServerConfigMissingError } from '@/data/server-connection';
-import { AUTH_PATH, authSuccess, FAKE_API_URL, fakePocketBase } from '@/test-utils/fake-pocketbase';
+import {
+  AUTH_PATH,
+  authSuccess,
+  FAKE_API_URL,
+  fakePocketBase,
+  REFRESH_PATH,
+} from '@/test-utils/fake-pocketbase';
 
 describe('app back-end', () => {
   it('connects to PocketBase with the configured organizer', async () => {
@@ -24,6 +30,8 @@ describe('app back-end', () => {
     expect(requests.map((request) => request.path)).toEqual([
       AUTH_PATH,
       expect.stringMatching(/^\/api\/collections\/hunts\/records\?/),
+      // An empty list may come from a revoked token: the server checks it.
+      REFRESH_PATH,
     ]);
   });
 
