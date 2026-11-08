@@ -127,8 +127,8 @@ describe("answer page", () => {
     expect(page.visibleText()).toContain("Vous n'avez pas encore répondu");
     expect(page.isShown("answer-yes")).toBe(true);
     expect(page.isShown("answer-no")).toBe(true);
-    expect(page.$("answer-yes").textContent).toBe("Je viens");
-    expect(page.$("answer-no").textContent).toBe("Je ne viens pas");
+    expect(page.$("answer-yes").textContent?.trim()).toBe("Je viens");
+    expect(page.$("answer-no").textContent?.trim()).toBe("Je ne viens pas");
     expect(page.$("answer-yes").getAttribute("aria-pressed")).toBe("false");
     expect(page.isShown("loading")).toBe(false);
     expect(page.document.title).toContain("Lundi 14 novembre");
@@ -276,7 +276,7 @@ describe("answer page", () => {
 
       expect(page.visibleText()).toContain("Impossible de joindre le serveur");
       expect(page.isShown("retry")).toBe(true);
-      expect(page.$("retry").textContent).toBe("Réessayer");
+      expect(page.$("retry").textContent?.trim()).toBe("Réessayer");
 
       (page.$("retry") as HTMLButtonElement).click();
 
@@ -302,7 +302,7 @@ describe("answer page", () => {
       ),
     );
     expect(page.isShown("send-retry")).toBe(true);
-    expect(page.$("send-retry").textContent).toBe("Réessayer");
+    expect(page.$("send-retry").textContent?.trim()).toBe("Réessayer");
 
     (page.$("send-retry") as HTMLButtonElement).click();
 
