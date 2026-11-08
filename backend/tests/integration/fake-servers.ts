@@ -16,16 +16,25 @@ export interface GatewayRequest {
 export async function startFakeGateway() {
   const requests: GatewayRequest[] = [];
   let status = 202;
+  let delayMs = 0;
+  let onRequest: ((request: GatewayRequest) => Promise<void>) | null = null;
   const server: Server = createHttpServer((request, response) => {
     let body = "";
     request.on("data", (chunk) => (body += chunk));
-    request.on("end", () => {
-      requests.push({
+    request.on("end", async () => {
+      const recorded = {
         method: request.method ?? "",
         url: request.url ?? "",
         authorization: request.headers.authorization ?? "",
         body: JSON.parse(body || "null"),
-      });
+      };
+      requests.push(recorded);
+      try {
+        await onRequest?.(recorded);
+      } catch {
+        // Assertions are checked by the test afterwards.
+      }
+      if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
       response.writeHead(status, { "Content-Type": "application/json" });
       response.end(JSON.stringify({ id: "x", state: "Pending" }));
     });
@@ -39,6 +48,14 @@ export async function startFakeGateway() {
     requests,
     answerWith(code: number) {
       status = code;
+    },
+    /** Answers each request after `ms` milliseconds (slow phone). */
+    delayAnswers(ms: number) {
+      delayMs = ms;
+    },
+    /** Runs `callback` on each request, before answering it. */
+    onRequest(callback: ((request: GatewayRequest) => Promise<void>) | null) {
+      onRequest = callback;
     },
     stop: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };

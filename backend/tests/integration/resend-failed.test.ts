@@ -137,6 +137,8 @@ describe("resend failed invitations", () => {
       });
     }
     gateway.answerWith(202);
+    gateway.delayAnswers(0);
+    gateway.onRequest(null);
     await setSmtp(true);
   });
 
@@ -375,6 +377,61 @@ describe("resend failed invitations", () => {
     expect(await invitationOf(hunt.id, member.id)).toMatchObject({
       sms_status: "failed",
       email_status: "failed",
+    });
+  });
+
+  describe("long sendings", () => {
+    const ms = (value: string) => Date.parse(value.replace(" ", "T"));
+
+    it("refreshes a channel's sending just before sending it", async () => {
+      const first = await newMember({ email: "" });
+      const second = await newMember({ email: "" });
+      const hunt = await newHunt();
+      gateway.delayAnswers(1000);
+      let seen: ApiRecord | undefined;
+      gateway.onRequest(async (request) => {
+        if (JSON.stringify(request.body).includes(second.phone as string)) {
+          seen = await invitationOf(hunt.id, second.id);
+        }
+      });
+
+      const response = await send(hunt.id);
+
+      expect(response.body.sms.sent).toBe(2);
+      expect(smsTo(first.phone as string)).toHaveLength(1);
+      // While its SMS was being sent, the second invitation was `sending`,
+      // refreshed after the first SMS (1 s): never stale while in progress.
+      expect(seen?.sms_status).toBe("sending");
+      expect(
+        ms(seen?.updated as string) - ms(seen?.created as string),
+      ).toBeGreaterThanOrEqual(900);
+    });
+
+    it("does not send a channel taken over meanwhile", async () => {
+      const first = await newMember();
+      const second = await newMember();
+      const hunt = await newHunt();
+      gateway.delayAnswers(500);
+      gateway.onRequest(async (request) => {
+        if (JSON.stringify(request.body).includes(first.phone as string)) {
+          // As if resend-failed had taken it over (and failed).
+          await setStatuses(hunt.id, second.id, {
+            sms_status: "failed",
+            email_status: "failed",
+          });
+        }
+      });
+
+      const response = await send(hunt.id);
+
+      expect(response.status).toBe(200);
+      expect(smsTo(first.phone as string)).toHaveLength(1);
+      expect(smsTo(second.phone as string)).toHaveLength(0);
+      expect(mailsTo(second.email as string)).toHaveLength(0);
+      expect(await invitationOf(hunt.id, second.id)).toMatchObject({
+        sms_status: "failed",
+        email_status: "failed",
+      });
     });
   });
 });
