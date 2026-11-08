@@ -27,6 +27,8 @@ const invitations =
   require("../../pb_hooks/lib/invitations.cjs") as typeof import("../../pb_hooks/lib/invitations.cjs");
 const transports =
   require("../../pb_hooks/lib/transports.cjs") as typeof import("../../pb_hooks/lib/transports.cjs");
+const { redactAnswerTokens } =
+  require("../../pb_hooks/lib/log-redaction.cjs") as typeof import("../../pb_hooks/lib/log-redaction.cjs");
 const { messageVariables, renderTemplate, renderSms, DEFAULT_TEMPLATE_BODY } =
   require("../../pb_hooks/lib/message-template.cjs") as typeof import("../../pb_hooks/lib/message-template.cjs");
 
@@ -115,6 +117,12 @@ routerAdd("POST", "/api/test/transports", (e) => {
       lib.gatewayRequest(config.sms, { to: "+33639981000", text }),
     ),
   });
+});
+
+routerAdd("POST", "/api/test/log-redaction", (e) => {
+  const lib = require(\`\${__hooks}/lib/log-redaction.cjs\`);
+  const inputs = e.requestInfo().body.inputs;
+  return e.json(200, inputs.map((text) => lib.redactAnswerTokens(text)));
 });
 
 routerAdd("POST", "/api/test/sms-encoding", (e) => {
@@ -299,6 +307,17 @@ const TRANSPORT_ENV = {
   DIANE_SMS_GATEWAY_PASSWORD: "pässwörd",
   DIANE_EMAIL_TRANSPORT: "fake",
 };
+
+/** URLs and Referers with or without an answer token. */
+const LOG_URLS = [
+  "/api/diane/r/abcDEF123",
+  "/api/diane/r/abc%2Fdef?x=1",
+  "/r/abc/",
+  "https://diane.example.org/r/abc#top",
+  "/api/diane/r/",
+  "/api/diane/health",
+  "",
+];
 
 /** Phone numbers exercising separators and rejections. */
 const PHONES = [
@@ -576,6 +595,12 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
         transports.gatewayRequest(config.sms, { to: "+33639981000", text }),
       ),
     });
+  });
+
+  it("redacts answer tokens exactly like Node", async () => {
+    expect(
+      await inJsvm(pocketbase.url, "log-redaction", { inputs: LOG_URLS }),
+    ).toStrictEqual(LOG_URLS.map((text) => redactAnswerTokens(text)));
   });
 
   it("sizes and transliterates SMS exactly like Node", async () => {
