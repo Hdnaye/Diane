@@ -175,9 +175,12 @@ describe("reminders", () => {
     );
     const cancelled = await invite(await newHunt({ status: "cancelled" }));
     const draft = await invite(await newHunt({ status: "draft" }));
-    // Invited 10 hours before the deadline: just got the invitation.
+    // Invited 15 hours before the deadline: just got the invitation.
     const recent = await invite(
-      await newHunt({ invitations_sent_at: fromNow(-13 * HOUR) }),
+      await newHunt({
+        response_deadline: fromNow(5 * HOUR),
+        invitations_sent_at: fromNow(-10 * HOUR),
+      }),
     );
 
     await remindedTo(control.member, 2);
