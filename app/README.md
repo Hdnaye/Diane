@@ -37,7 +37,7 @@ au moment du build.
 organisateur ») ; à remplacer par une vraie authentification avant toute distribution.
 
 Si une variable manque ou si le serveur ne répond pas, l'accueil affiche « Connexion au serveur
-impossible… » avec un bouton « Réessayer ».
+impossible… » avec un bouton « Réessayer » (« Créer une battue » est alors désactivé).
 
 ## Lancer dans Expo Go
 
@@ -92,6 +92,12 @@ npm run format:check
     une seule à la fois (double montage compris), réessayée sur 429 (le back limite les
     authentifications à 2 par 3 s), renouvelée quand le jeton expire ou sur un 401. Jeton gardé
     en mémoire seulement.
+  - Jeton révoqué (ex. `npm run setup` relancé dans `backend/`, qui régénère le `tokenKey`) :
+    PocketBase le traite en invité (liste vide, création refusée en 400), jamais en 401. Le
+    serveur revalide donc le jeton (`auth-refresh`) si la dernière validation date de plus de
+    60 s (`VALIDATION_INTERVAL_MS`), et après une réponse douteuse (liste vide, création
+    refusée sans erreur de champ, 403) : jeton refusé → nouvelle authentification et un seul
+    nouvel essai.
   - Les requêtes sont réessayées une fois (`src/lib/query-client.ts`) : serveur injoignable
     signalé en 2 s environ.
   - Types : `src/data/types.ts` dérive ceux de pocketbase-typegen
