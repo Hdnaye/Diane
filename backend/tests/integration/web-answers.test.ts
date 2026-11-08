@@ -45,19 +45,6 @@ describe("web answers", () => {
     return response.body;
   }
 
-  async function patch(
-    collection: string,
-    id: string,
-    body: Record<string, unknown>,
-  ) {
-    const response = await pb.api(recordsPath(collection, id), {
-      method: "PATCH",
-      token: pb.organizerToken,
-      body,
-    });
-    if (response.status !== 200) throw new Error("Setup failed");
-  }
-
   const newHunt = (fields: Record<string, unknown> = {}) =>
     create("hunts", {
       date: nextDay(),
