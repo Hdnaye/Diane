@@ -1,7 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 import { Calendar, type CalendarProps, type DateData } from 'react-native-calendars';
-import defaultTheme from 'tailwindcss/defaultTheme';
 
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
@@ -30,12 +29,11 @@ const CALENDAR_THEME = {
   textMonthFontSize: remToPx(fontSize.xl[0]),
   arrowColor: colors.primary.DEFAULT,
   // Replaces the library's whole `dayHeader` style, whose 32 px width on a single line cuts
-  // the day names ("m…") in the readable font. Its margins (2 px / 7 px) are kept, taken from
-  // Tailwind's spacing scale (`mt-0.5` / `mb-2`) like every other space of the app.
+  // the day names ("m…") in the readable font. Its margins are kept, as spacing tokens.
   'stylesheet.calendar.header': {
     dayHeader: {
-      marginTop: remToPx(defaultTheme.spacing['0.5']),
-      marginBottom: remToPx(defaultTheme.spacing['2']),
+      marginTop: remToPx(spacing['day-name-top']),
+      marginBottom: remToPx(spacing['day-name-bottom']),
       width: DAY_WIDTH,
       textAlign: 'center',
       fontFamily: fontFamily['sans-bold'][0],
