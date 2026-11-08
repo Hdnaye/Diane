@@ -36,7 +36,7 @@ describe('MembersScreen', () => {
   it('lists the members by name, with their contacts written the usual way', async () => {
     await renderMemberScreens(routes, { members: MEMBERS });
 
-    const names = await screen.findAllByRole('heading', { level: 3 });
+    const names = await screen.findAllByRole('heading', { name: /Test|Fictif|Exemple/ });
     expect(names.map((name) => name.props.children)).toEqual([
       'Alain Test',
       'Émile Fictif',

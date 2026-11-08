@@ -84,15 +84,15 @@ describe('in-memory member repository', () => {
     const repository = createInMemoryMemberRepository();
 
     expect(
-      (await rejection(repository.create({ name: 'Paul Essai', phone: '', email: '', active: true })))
-        .fields
-    ).toEqual({ phone: 'Indiquez au moins un téléphone ou un e-mail.' });
-    expect(
       (
         await rejection(
-          repository.create({ name: '', phone: '12 34', email: '', active: true })
+          repository.create({ name: 'Paul Essai', phone: '', email: '', active: true })
         )
       ).fields
+    ).toEqual({ phone: 'Indiquez au moins un téléphone ou un e-mail.' });
+    expect(
+      (await rejection(repository.create({ name: '', phone: '12 34', email: '', active: true })))
+        .fields
     ).toEqual({
       name: "Indiquez le nom de l'adhérent.",
       phone: 'Numéro de téléphone invalide. Exemple : 06 39 98 00 01.',
