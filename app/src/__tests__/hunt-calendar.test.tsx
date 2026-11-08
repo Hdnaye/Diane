@@ -1,4 +1,5 @@
 import { render, screen, userEvent } from '@testing-library/react-native';
+import defaultTheme from 'tailwindcss/defaultTheme';
 
 import { HuntCalendar } from '@/components/hunt-calendar';
 import { freezeDate, unfreezeDate } from '@/test-utils/clock';
@@ -43,6 +44,18 @@ describe('HuntCalendar', () => {
       expect(name).toHaveStyle({ width: dayWidth });
       expect(name).toHaveStyle({ fontFamily: fontFamily['sans-bold'][0] });
       expect(name).toHaveStyle({ color: colors.muted.foreground });
+    }
+  });
+
+  it("keeps the space around the day names (the library's margins, from the spacing scale)", async () => {
+    await render(<HuntCalendar huntDates={[]} onSelectDate={jest.fn()} />);
+
+    // The library's own style has 2 px above and 7 px below, lost when replacing `dayHeader`.
+    for (const name of screen.getAllByText(/^(lun|mar|mer|jeu|ven|sam|dim)\.$/, {
+      includeHiddenElements: true,
+    })) {
+      expect(name).toHaveStyle({ marginTop: remToPx(defaultTheme.spacing['0.5']) });
+      expect(name).toHaveStyle({ marginBottom: remToPx(defaultTheme.spacing['2']) });
     }
   });
 
