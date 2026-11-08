@@ -38,9 +38,9 @@ for (const route of [
       const lib = /** @type {typeof import("./lib/invitations.cjs")} */ (
         require(`${__hooks}/lib/invitations.cjs`)
       );
-      const { transportConfig, createTransports, deliver } =
-        /** @type {typeof import("./lib/transports.cjs")} */ (
-          require(`${__hooks}/lib/transports.cjs`)
+      const { appTransports, sendClaimed } =
+        /** @type {typeof import("./shared/messaging.cjs")} */ (
+          require(`${__hooks}/shared/messaging.cjs`)
         );
 
       const resending = (e.request?.url?.path ?? "").endsWith("/resend-failed");
@@ -102,7 +102,7 @@ for (const route of [
 
       // Invitations and channels to send, chosen in one transaction
       // (concurrent requests are serialized: nothing is sent twice).
-      /** @type {{ id: string, sms: boolean, email: boolean }[]} */
+      /** @type {import("./shared/messaging.cjs").ClaimedItem[]} */
       const toSend = [];
       e.app.runInTransaction((txApp) => {
         const current = txApp.findRecordById("hunts", huntId);
@@ -144,7 +144,11 @@ for (const route of [
             if (channels.sms) invitation.set("sms_status", "sending");
             if (channels.email) invitation.set("email_status", "sending");
             txApp.save(invitation);
-            toSend.push({ id: invitation.id, ...channels });
+            toSend.push({
+              id: invitation.id,
+              ...channels,
+              claimed: invitation.getString("updated"),
+            });
           }
           return;
         }
@@ -180,35 +184,17 @@ for (const route of [
           invitation.set("sms_status", "sending");
           invitation.set("email_status", "sending");
           txApp.save(invitation);
-          toSend.push({ id: invitation.id, sms: true, email: true });
+          toSend.push({
+            id: invitation.id,
+            sms: true,
+            email: true,
+            claimed: invitation.getString("updated"),
+          });
         }
       });
       hunt = e.app.findRecordById("hunts", huntId);
 
-      const outboxDir = $os.getenv("DIANE_FAKE_OUTBOX_DIR");
-      const settings = e.app.settings();
-      const transports = createTransports(
-        transportConfig((name) => $os.getenv(name)),
-        {
-          httpSend: (request) => ({
-            statusCode: $http.send(request).statusCode,
-          }),
-          mailSend: (message) =>
-            e.app.newMailClient().send(new MailerMessage(message)),
-          record: (kind, message) =>
-            $os.writeFile(
-              `${outboxDir}/${kind}-${$security.randomString(24)}.json`,
-              JSON.stringify(message),
-              // Owner read/write only (goja passes the number as FileMode).
-              /** @type {fs.FileMode} */ (/** @type {unknown} */ (0o600)),
-            ),
-          smtpEnabled: settings.smtp.enabled,
-          defaultSender: {
-            address: settings.meta.senderAddress,
-            name: settings.meta.senderName,
-          },
-        },
-      );
+      const transports = appTransports(e.app);
 
       /** @type {Record<string, ReturnType<typeof huntFields>>} */
       const hunts = {};
@@ -219,13 +205,11 @@ for (const route of [
         return hunts[id];
       };
 
-      /** @param {{ id: string, sms: boolean, email: boolean }} item */
-      const sendOne = (item) => {
-        const invitation = e.app.findRecordById("invitations", item.id);
-        const member = e.app.findRecordById(
-          "members",
-          invitation.getString("member"),
-        );
+      /**
+       * @param {core.Record} invitation
+       * @param {core.Record} member
+       */
+      const compose = (invitation, member) => {
         const open = e.app
           .findRecordsByFilter(
             "invitations",
@@ -244,7 +228,7 @@ for (const route of [
                 now,
               ),
           );
-        const messages = lib.invitationMessages({
+        return lib.invitationMessages({
           body: template.getString("body"),
           hunt: huntFields(hunt),
           link: /** @type {string} */ (
@@ -252,70 +236,17 @@ for (const route of [
           ),
           several: open.length > 1,
         });
-
-        // A channel not to send keeps its status and is not counted.
-        const untouched = { status: "", error: "" };
-        const sms = item.sms
-          ? deliver(transports.sms, {
-              to: member.getString("phone"),
-              text: messages.sms,
-            })
-          : untouched;
-        const email = item.email
-          ? deliver(transports.email, {
-              to: member.getString("email"),
-              subject: messages.email.subject,
-              text: messages.email.text,
-            })
-          : untouched;
-        for (const [channel, outcome] of /** @type {const} */ ([
-          ["sms", sms],
-          ["email", email],
-        ])) {
-          if (outcome.status === "failed") {
-            e.app
-              .logger()
-              .warn(
-                "Invitation not sent",
-                "invitation",
-                item.id,
-                "channel",
-                channel,
-                "error",
-                outcome.error,
-              );
-          }
-        }
-        if (item.sms) invitation.set("sms_status", sms.status);
-        if (item.email) invitation.set("email_status", email.status);
-        e.app.save(invitation);
-        return { sms_status: sms.status, email_status: email.status };
       };
 
-      // An error on one invitation (e.g. its member deleted meanwhile) does
-      // not stop the others: its claimed channels are recorded as failed
-      // (if it still exists), to be resent.
-      const results = toSend.map((item) => {
-        try {
-          return sendOne(item);
-        } catch {
-          e.app
-            .logger()
-            .warn("Invitation sending error", "invitation", item.id);
-          try {
-            const invitation = e.app.findRecordById("invitations", item.id);
-            if (item.sms) invitation.set("sms_status", "failed");
-            if (item.email) invitation.set("email_status", "failed");
-            e.app.save(invitation);
-          } catch {
-            // Deleted: nothing left to record.
-          }
-          return {
-            sms_status: item.sms ? "failed" : "",
-            email_status: item.email ? "failed" : "",
-          };
-        }
-      });
+      // Each invitation on its own: an error on one (e.g. its member
+      // deleted meanwhile) does not stop the others.
+      const results = toSend.map((item) =>
+        sendClaimed(e.app, transports, item, {
+          fields: { sms: "sms_status", email: "email_status" },
+          compose,
+          label: "Invitation",
+        }),
+      );
 
       return e.json(200, lib.sendSummary(results));
     },

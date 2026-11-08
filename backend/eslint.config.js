@@ -81,6 +81,32 @@ export default defineConfig(
     },
   },
   {
+    // Hook helpers using PocketBase's APIs, shared by several hooks
+    // (`require(`${__hooks}/shared/x.cjs`)` inside a handler): CommonJS run
+    // in the JSVM, typed through pb_data/types.d.ts.
+    files: ["pb_hooks/shared/**/*.cjs"],
+    languageOptions: { sourceType: "commonjs", globals: {} },
+    rules: {
+      "no-undef": "off",
+      "@typescript-eslint/triple-slash-reference": [
+        "error",
+        { path: "always" },
+      ],
+      "@typescript-eslint/no-require-imports": "off",
+      "no-restricted-globals": ["error", ...forbidNodeGlobals(NODE_GLOBALS)],
+      "no-restricted-syntax": [
+        "error",
+        forbidDynamicImport,
+        {
+          selector:
+            "CallExpression[callee.name='require']:not([arguments.0.type='TemplateLiteral'][arguments.0.quasis.0.value.raw=''][arguments.0.expressions.0.name='__hooks'])",
+          message:
+            "Only require local modules through a path rooted at __hooks, e.g. require(`${__hooks}/lib/sms-reply.cjs`): Node modules do not exist in PocketBase's JSVM (goja).",
+        },
+      ],
+    },
+  },
+  {
     // Pure business logic shared by hooks (`require(`${__hooks}/lib/x.cjs`)`)
     // and Vitest (`createRequire`): CommonJS, no Node, no PocketBase globals.
     files: ["pb_hooks/lib/**/*.cjs"],
