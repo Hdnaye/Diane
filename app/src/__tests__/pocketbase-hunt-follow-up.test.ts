@@ -267,7 +267,10 @@ describe('PocketBase hunt follow-up', () => {
     async (places, answer, participation) => {
       const { requests, followUp } = setUp((request) =>
         request.method === 'GET'
-          ? { status: 200, body: { present: 4, waiting_list: [], absent: 0, pending: 0, ...places } }
+          ? {
+              status: 200,
+              body: { present: 4, waiting_list: [], absent: 0, pending: 0, ...places },
+            }
           : { status: 200, body: invitationRecord({ id: 'inv1' }) }
       );
 
