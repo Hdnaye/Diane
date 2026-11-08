@@ -70,47 +70,45 @@ export const messages = {
  */
 export function createHuntFormSchema({ takenDates, now }: { takenDates: string[]; now: Date }) {
   const today = toDateKey(now);
+  // Every rule is checked in one pass, so the organizer sees all the errors at once.
   return z
     .object({
       date: z.string(),
       meetingTime: z.string().regex(/^\d{2}:\d{2}$/),
-      maxParticipants: z
-        .string()
-        .trim()
-        .refine((value) => value === '' || (/^\d+$/.test(value) && Number(value) >= 1), {
-          error: messages.maxParticipants,
-        })
-        .transform((value) => (value === '' ? null : Number(value))),
+      maxParticipants: z.string().trim(),
       responseDeadline: z.date(),
     })
     .superRefine((values, ctx) => {
+      const issue = (path: keyof HuntFormValues, message: string) =>
+        ctx.addIssue({ code: 'custom', path: [path], message });
+
       if (!values.date) {
-        ctx.addIssue({ code: 'custom', path: ['date'], message: messages.dateRequired });
-        return;
-      }
-      if (values.date < today) {
-        ctx.addIssue({ code: 'custom', path: ['date'], message: messages.dateInPast });
+        issue('date', messages.dateRequired);
+      } else if (values.date < today) {
+        issue('date', messages.dateInPast);
       } else if (takenDates.includes(values.date)) {
-        ctx.addIssue({ code: 'custom', path: ['date'], message: messages.dateTaken(values.date) });
+        issue('date', messages.dateTaken(values.date));
+      }
+      if (values.maxParticipants !== '' && !isWholeNumberFromOne(values.maxParticipants)) {
+        issue('maxParticipants', messages.maxParticipants);
       }
       if (values.responseDeadline <= now) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['responseDeadline'],
-          message: messages.deadlinePassed,
-        });
-      } else if (values.responseDeadline >= huntStart(values.date, values.meetingTime)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['responseDeadline'],
-          message: messages.deadlineAfterHunt,
-        });
+        issue('responseDeadline', messages.deadlinePassed);
+      } else if (
+        values.date &&
+        values.responseDeadline >= huntStart(values.date, values.meetingTime)
+      ) {
+        issue('responseDeadline', messages.deadlineAfterHunt);
       }
     })
     .transform((values): NewHunt => ({
       date: values.date,
       meetingTime: values.meetingTime,
-      maxParticipants: values.maxParticipants,
+      maxParticipants: values.maxParticipants === '' ? null : Number(values.maxParticipants),
       responseDeadline: values.responseDeadline.toISOString(),
     }));
+}
+
+function isWholeNumberFromOne(value: string): boolean {
+  return /^\d+$/.test(value) && Number(value) >= 1;
 }
