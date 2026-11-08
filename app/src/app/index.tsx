@@ -55,7 +55,12 @@ export default function HomeScreen() {
           onSelectDate={setSelectedDate}
         />
       </View>
-      <Button variant="primary" size="lg" className="w-full" onPress={createHunt}>
+      <Button
+        variant="primary"
+        size="lg"
+        className="w-full"
+        disabled={connection.isError}
+        onPress={createHunt}>
         <Text>Créer une battue</Text>
       </Button>
       {!connection.isError && (
