@@ -26,13 +26,14 @@ export function fakePocketBase(handler: FakeHandler) {
     const { status, body = {} } = await handler(request);
     return { status, url, json: async () => body };
   });
-  global.fetch = fetchMock as unknown as typeof fetch;
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
   return { requests, fetchMock };
 }
 
 /** A fake JWT the SDK accepts, expiring in `seconds` (negative: already expired). */
 export function fakeToken(seconds = 3600, id = 'fake-token') {
-  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const encode = (value: object) =>
+    btoa(JSON.stringify(value)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
   const exp = Math.floor(Date.now() / 1000) + seconds;
   return `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ exp, id })}.signature`;
 }
