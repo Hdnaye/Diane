@@ -4,7 +4,11 @@
 // Pure CommonJS: loaded by hooks with require(`${__hooks}/lib/invitations.cjs`)
 // and by Vitest with createRequire.
 
-const { parisToUtc, parseUtcDateTime } = require("./paris-time.cjs");
+const {
+  parisToUtc,
+  utcToParis,
+  parseUtcDateTime,
+} = require("./paris-time.cjs");
 const {
   formatFrenchDay,
   formatFrenchTime,
@@ -14,8 +18,13 @@ const {
   renderSms,
 } = require("./message-template.cjs");
 
-/** Default response deadline after sending (CLAUDE.md: +48 h). */
-const DEFAULT_DEADLINE_MS = 48 * 60 * 60 * 1000;
+/**
+ * Default response deadline (CLAUDE.md: about +48 h), rounded to a time
+ * easy to read in a message: this many days after the sending day, at
+ * DEFAULT_DEADLINE_TIME (Paris).
+ */
+const DEFAULT_DEADLINE_DAYS = 2;
+const DEFAULT_DEADLINE_TIME = "20:00";
 
 /**
  * @typedef {object} Hunt
@@ -37,6 +46,28 @@ const DEFAULT_DEADLINE_MS = 48 * 60 * 60 * 1000;
  */
 function toPocketBaseDate(date) {
   return date.toISOString().replace("T", " ");
+}
+
+/**
+ * Default response deadline of invitations sent at `now`: the Paris day of
+ * `now` + 2 days, at 20:00 Paris (e.g. sent on Sunday 11:00 -> Tuesday
+ * 20:00).
+ *
+ * @param {Date} now
+ * @returns {string} PocketBase UTC datetime.
+ */
+function defaultDeadline(now) {
+  const [year, month, date] = utcToParis(now).day.split("-").map(Number);
+  const day = new Date(
+    Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(date) + DEFAULT_DEADLINE_DAYS,
+    ),
+  )
+    .toISOString()
+    .slice(0, 10);
+  return toPocketBaseDate(parisToUtc(day, DEFAULT_DEADLINE_TIME));
 }
 
 /**
@@ -97,18 +128,19 @@ function sendPlan(hunt, now) {
     }
     return { ok: true, deadline: null };
   }
-  const byDefault = new Date(now.getTime() + DEFAULT_DEADLINE_MS);
+  const byDefault = defaultDeadline(now);
   if (
-    byDefault.getTime() >= parisToUtc(hunt.date, hunt.meeting_time).getTime()
+    /** @type {Date} */ (parseUtcDateTime(byDefault)).getTime() >=
+    parisToUtc(hunt.date, hunt.meeting_time).getTime()
   ) {
     return {
       ok: false,
       code: "deadline_missing",
       message:
-        "La battue a lieu dans moins de 48 h : fixez une date limite de réponse.",
+        "La battue a lieu avant la date limite par défaut (dans 2 jours à 20h00) : fixez une date limite de réponse.",
     };
   }
-  return { ok: true, deadline: toPocketBaseDate(byDefault) };
+  return { ok: true, deadline: byDefault };
 }
 
 /**
@@ -227,6 +259,7 @@ function sendSummary(results) {
 
 module.exports = {
   toPocketBaseDate,
+  defaultDeadline,
   answerLink,
   sendPlan,
   answerRefusal,
