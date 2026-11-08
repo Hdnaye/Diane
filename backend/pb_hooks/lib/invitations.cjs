@@ -17,6 +17,7 @@ const {
   renderTemplate,
   renderSms,
 } = require("./message-template.cjs");
+const { participationAfterAnswer } = require("./waiting-list.cjs");
 
 /**
  * Default response deadline (CLAUDE.md), at a time easy to read in a
@@ -204,6 +205,39 @@ function isOpenInvitation(invitation, hunt, now) {
   );
 }
 
+/**
+ * @typedef {{ ok: true, participation: string, changed: boolean }
+ *   | { ok: false, refusal: Refusal }} AnswerPlan
+ */
+
+/**
+ * Outcome of a member's answer, the same through the web link and by SMS:
+ * refused after the deadline or for a cancelled / closed hunt, else the
+ * participation after it (free place or waiting list). An unchanged
+ * answer (changed: false) keeps its time, i.e. its place in the waiting
+ * list.
+ *
+ * @param {object} input
+ * @param {Hunt & { max_participants: number }} input.hunt
+ * @param {string} input.current   Current participation of the member.
+ * @param {readonly string[]} input.others Participations of the other invitations.
+ * @param {"yes" | "no"} input.answer
+ * @param {Date} now
+ * @returns {AnswerPlan}
+ */
+function planAnswer({ hunt, current, others, answer }, now) {
+  const refusal = answerRefusal(hunt, now);
+  if (refusal) return { ok: false, refusal };
+  const participation = participationAfterAnswer({
+    current,
+    answer,
+    maxParticipants: hunt.max_participants,
+    presentCount: others.filter((p) => p === "present").length,
+    waitingCount: others.filter((p) => p === "waiting_list").length,
+  });
+  return { ok: true, participation, changed: participation !== current };
+}
+
 /** @type {Record<string, "yes" | "no" | null>} */
 const ANSWERS = {
   pending: null,
@@ -322,6 +356,7 @@ module.exports = {
   sendPlan,
   answerRefusal,
   isOpenInvitation,
+  planAnswer,
   publicAnswerView,
   invitationMessages,
   STALE_SENDING_MS,
