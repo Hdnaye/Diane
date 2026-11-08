@@ -164,6 +164,7 @@ body {
   cursor: pointer;
 }
 
+.title:focus-visible,
 .button:focus-visible {
   outline: 4px solid var(--ring);
   outline-offset: 3px;

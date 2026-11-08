@@ -47,7 +47,8 @@ function currentAnswerText(participation) {
     case "present":
       return "Votre réponse : je viens";
     case "waiting_list":
-      return "Votre réponse : je viens (liste d'attente)";
+      // Not "je viens": a member coming back must not turn up.
+      return "Vous êtes sur liste d'attente (pas encore inscrit). Si une place se libère, l'organisateur pourra vous ajouter aux participants.";
     case "absent":
       return "Votre réponse : je ne viens pas";
     default:
@@ -65,7 +66,7 @@ function confirmationText(view) {
     case "present":
       return `C'est noté : vous venez à ${hunt}. Merci !${change}`;
     case "waiting_list":
-      return `C'est noté. La battue est complète : vous êtes sur liste d'attente pour ${hunt}. Si une place se libère, l'organisateur pourra vous ajouter aux participants.${change}`;
+      return `C'est noté. La battue est complète : vous êtes sur liste d'attente pour ${hunt}.${change}`;
     default:
       return `C'est noté : vous ne venez pas à ${hunt}.${change}`;
   }
@@ -84,7 +85,7 @@ function refusalText(view) {
     return "Cette battue est clôturée : les réponses ne sont plus possibles.";
   }
   const when = view.deadline_label ? ` (${view.deadline_label})` : "";
-  return `La date limite de réponse est passée${when}. Pour modifier votre réponse, contactez l'organisateur.`;
+  return `La date limite de réponse est passée${when}. Pour répondre ou changer votre réponse, contactez l'organisateur.`;
 }
 
 /**
@@ -110,10 +111,17 @@ export async function start({ document, location, fetch }) {
   /** @type {"yes" | "no" | null} */
   let lastAnswer = null;
 
+  /** Set by a user's retry: the button that had the focus disappears. */
+  let focusNextTitle = false;
+
   /** @param {"loading" | "error" | "hunt"} section */
   function show(section) {
     for (const id of ["loading", "error", "hunt"]) {
       $(id).hidden = id !== section;
+    }
+    if (focusNextTitle && section !== "loading") {
+      focusNextTitle = false;
+      $(section === "error" ? "error-title" : "hunt-title").focus();
     }
   }
 
@@ -163,6 +171,9 @@ export async function start({ document, location, fetch }) {
     document.title = `Battue du ${date}`;
     $("hunt-date").textContent = date;
     $("hunt-time").textContent = view.hunt.time_label;
+    // A cancelled hunt: the banner (above the date) says it all.
+    $("hunt-time-line").hidden = view.hunt.cancelled;
+    $("current").hidden = view.hunt.cancelled;
 
     const notice = $("notice");
     notice.hidden = view.can_answer;
@@ -174,12 +185,13 @@ export async function start({ document, location, fetch }) {
 
     $("current").textContent = currentAnswerText(view.participation);
     $("answers").hidden = !view.can_answer;
+    // Only a confirmed place checks "Je viens" (not the waiting list).
     const answer =
       view.participation === "absent"
         ? "no"
-        : view.participation === "pending"
-          ? null
-          : "yes";
+        : view.participation === "present"
+          ? "yes"
+          : null;
     buttons.yes.setAttribute("aria-pressed", String(answer === "yes"));
     buttons.no.setAttribute("aria-pressed", String(answer === "no"));
     show("hunt");
@@ -285,6 +297,7 @@ export async function start({ document, location, fetch }) {
     if (lastAnswer) send(lastAnswer);
   });
   $("retry").addEventListener("click", () => {
+    focusNextTitle = true;
     load();
   });
 

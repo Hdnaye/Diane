@@ -6,7 +6,7 @@
 ## Prerequisites
 
 - Linux x86_64 (dev) or arm64 (Raspberry Pi, 64-bit OS).
-- Node.js >= 22 (LTS, see `.nvmrc`; `engines` requires >= 22.13) and npm
+- Node.js >= 22 (LTS, see `.nvmrc`; `engines` requires >= 22.22.2, needed by jsdom) and npm
   (tooling only: PocketBase itself is a single binary). Use the npm bundled
   with the Node version of `.nvmrc` (npm 10.9.9, see `packageManager`):
   another npm major rewrites `package-lock.json`.
@@ -139,7 +139,8 @@ Routes (`pb_hooks/send-invitations.pb.js`, `pb_hooks/web-answers.pb.js`):
 ### Members' answer page
 
 `{DIANE_PUBLIC_URL}/r/{token}` serves `pb_public/answer/index.html`, the
-same page whatever the token (`pb_hooks/answer-page.pb.js`); its script
+same page whatever the token, with or without a trailing slash
+(`pb_hooks/answer-page.pb.js`); its script
 (`answer.js`, started by `main.js`) reads the token in the URL and only
 calls `GET`/`POST /api/diane/r/{token}`. Not a page of the Expo app
 (CLAUDE.md): plain HTML/CSS/JS, no framework, no build, no dependency, no
@@ -148,7 +149,10 @@ hunt date and time in large type, the deadline, the current answer, two
 64 px buttons "Je viens" / "Je ne viens pas", a confirmation announced to
 screen readers (`aria-live`, waiting list included), and plain messages for
 a passed deadline, a cancelled or closed hunt, an invalid link, or an
-unreachable server ("Réessayer").
+unreachable server ("Réessayer", then the focus moves to the title of
+the section shown). A member on the waiting list reads "Vous êtes sur liste
+d'attente (pas encore inscrit)", never "je viens"; a cancelled hunt shows
+its banner above the date, without meeting time nor answer.
 
 - Colors copied from the app's design tokens (`app/src/theme/tokens.js`)
   into `answer.css` (`--primary` = `colors.primary.DEFAULT`,

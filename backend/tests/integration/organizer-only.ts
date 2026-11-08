@@ -69,6 +69,32 @@ export function describeOrganizerOnlyAccess(
       expect(response.body.items).toBeUndefined();
     });
 
+    // PocketBase finds the collection whatever the case, and decodes the
+    // path: these spellings reach the same records.
+    it.each([
+      ["in upper case", () => recordsPath(collection.toUpperCase())],
+      [
+        "with an encoded letter",
+        () =>
+          recordsPath(
+            `%${collection.charCodeAt(0).toString(16)}${collection.slice(1)}`,
+          ),
+      ],
+      [
+        "with an encoded records",
+        () => `/api/collections/${collection}/re%63ords`,
+      ],
+    ])(
+      "refuses requests naming the collection %s with a 401",
+      async (_label, pathname) => {
+        const listed = await api(pathname());
+        const viewed = await api(`${pathname()}/${existingId}`);
+
+        expect(listed.status).toBe(401);
+        expect(viewed.status).toBe(401);
+      },
+    );
+
     it("refuses requests naming the collection by id with a 401", async () => {
       const info = await api(`/api/collections/${collection}`, {
         token: await superuserToken(),

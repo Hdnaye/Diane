@@ -23,8 +23,8 @@
         <p class="lead">Chargement…</p>
       </section>
 
-      <section id="error" class="card" hidden>
-        <h1 id="error-title" class="title"></h1>
+      <section id="error" class="card" role="alert" hidden>
+        <h1 id="error-title" class="title" tabindex="-1"></h1>
         <p id="error-detail" class="lead"></p>
         <button id="retry" type="button" class="button button-primary" hidden>
           Réessayer
@@ -32,13 +32,15 @@
       </section>
 
       <section id="hunt" class="card" hidden>
-        <h1 class="title">
+        <p id="notice" class="notice" hidden></p>
+        <h1 id="hunt-title" class="title" tabindex="-1">
           <span class="eyebrow">Battue du</span>
           <span id="hunt-date" class="hunt-date"></span>
         </h1>
-        <p class="hunt-time">Rendez-vous à <strong id="hunt-time"></strong></p>
+        <p id="hunt-time-line" class="hunt-time">
+          Rendez-vous à <strong id="hunt-time"></strong>
+        </p>
 
-        <p id="notice" class="notice" hidden></p>
         <p id="deadline" class="deadline" hidden></p>
         <p id="current" class="current"></p>
 
