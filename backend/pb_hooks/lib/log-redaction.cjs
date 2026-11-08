@@ -8,14 +8,23 @@
 const ANSWER_TOKEN = /\/r\/[^/?#\s]+/g;
 
 /**
- * `text` (a request URI or a Referer) with every answer token replaced by
- * ":token", e.g. "/api/diane/r/Xy...z?x=1" -> "/api/diane/r/:token?x=1".
+ * Any run of at least 43 alphanumeric characters (a token's length),
+ * wherever it is: hand-crafted requests (query, upper case path, unknown
+ * route, encoded Referer, User-Agent). Longer runs are redacted whole, e.g.
+ * "%2F" followed by a token.
+ */
+const TOKEN_LIKE = /[A-Za-z0-9]{43,}/g;
+
+/**
+ * `text` (a request path or query, a Referer, a User-Agent) with every
+ * answer token replaced by ":token", e.g. "/api/diane/r/Xy...z?x=1" ->
+ * "/api/diane/r/:token?x=1".
  *
  * @param {string} text
  * @returns {string}
  */
 function redactAnswerTokens(text) {
-  return text.replace(ANSWER_TOKEN, "/r/:token");
+  return text.replace(ANSWER_TOKEN, "/r/:token").replace(TOKEN_LIKE, ":token");
 }
 
 module.exports = { redactAnswerTokens };

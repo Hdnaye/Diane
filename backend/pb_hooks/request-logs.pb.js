@@ -2,7 +2,9 @@
 
 // Keeps answer link tokens out of PocketBase's request logs (`_logs`):
 // the URL of the answer page and routes (/r/{token}, /api/diane/r/{token})
-// and the Referer of requests sent from the answer page carry it.
+// and the Referer of requests sent from the answer page carry it. Any
+// token-like run (43+ alphanumeric characters) in the path, the query, the
+// Referer or the User-Agent is redacted too (hand-crafted requests).
 // PocketBase's activity logger (priority -1040) logs the request after the
 // other middlewares and the route ran: this middleware runs just inside it,
 // before the rate limiter (-1000), and redacts the request once handled, so
@@ -25,10 +27,11 @@ routerUse(
             request.url.path = path;
             request.url.rawPath = "";
           }
+          request.url.rawQuery = redactAnswerTokens(request.url.rawQuery);
         }
-        const referer = request?.header.get("Referer") ?? "";
-        if (referer) {
-          request?.header.set("Referer", redactAnswerTokens(referer));
+        for (const name of ["Referer", "User-Agent"]) {
+          const value = request?.header.get(name) ?? "";
+          if (value) request?.header.set(name, redactAnswerTokens(value));
         }
       }
     },
