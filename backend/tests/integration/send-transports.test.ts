@@ -3,143 +3,18 @@
 // server. Also: what happens when nothing is configured, and PocketBase's
 // output never contains a phone number or an e-mail address.
 import { randomBytes } from "node:crypto";
-import { createServer as createHttpServer, type Server } from "node:http";
-import { createServer as createTcpServer } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { huntDays, phoneNumbers, recordsPath, uniqueEmail } from "./api.js";
+import {
+  startFakeGateway,
+  startFakeSmtp,
+  startSilentGateway,
+} from "./fake-servers.js";
 import { startTestInstance, type TestInstance } from "./instance.js";
-import { freePort } from "./pocketbase-process.js";
 
 const nextPhone = phoneNumbers(42);
 const nextDay = huntDays(2114);
 const DEADLINE = "2113-12-01 17:00:00.000Z";
-
-interface GatewayRequest {
-  method: string;
-  url: string;
-  authorization: string;
-  body: unknown;
-}
-
-/** HTTP server answering like SMS Gateway for Android, recording requests. */
-async function startFakeGateway() {
-  const requests: GatewayRequest[] = [];
-  let status = 202;
-  const server: Server = createHttpServer((request, response) => {
-    let body = "";
-    request.on("data", (chunk) => (body += chunk));
-    request.on("end", () => {
-      requests.push({
-        method: request.method ?? "",
-        url: request.url ?? "",
-        authorization: request.headers.authorization ?? "",
-        body: JSON.parse(body || "null"),
-      });
-      response.writeHead(status, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ id: "x", state: "Pending" }));
-    });
-  });
-  const port = await freePort();
-  await new Promise<void>((resolve) =>
-    server.listen(port, "127.0.0.1", resolve),
-  );
-  return {
-    url: `http://127.0.0.1:${port}`,
-    requests,
-    answerWith(code: number) {
-      status = code;
-    },
-    stop: () => new Promise<void>((resolve) => server.close(() => resolve())),
-  };
-}
-
-/** TCP server accepting connections and never answering (phone asleep). */
-async function startSilentGateway() {
-  const sockets = new Set<import("node:net").Socket>();
-  let connections = 0;
-  const server = createTcpServer((socket) => {
-    connections++;
-    sockets.add(socket);
-    socket.on("close", () => sockets.delete(socket));
-  });
-  const port = await freePort();
-  await new Promise<void>((resolve) =>
-    server.listen(port, "127.0.0.1", resolve),
-  );
-  return {
-    url: `http://127.0.0.1:${port}`,
-    connections: () => connections,
-    stop: () =>
-      new Promise<void>((resolve) => {
-        for (const socket of sockets) socket.destroy();
-        server.close(() => resolve());
-      }),
-  };
-}
-
-interface Mail {
-  from: string;
-  to: string[];
-  data: string;
-}
-
-/** Minimal SMTP server (no TLS, no auth) recording the mails. */
-async function startFakeSmtp() {
-  const mails: Mail[] = [];
-  const server = createTcpServer((socket) => {
-    let buffer = "";
-    let inData = false;
-    let mail: Mail = { from: "", to: [], data: "" };
-    socket.write("220 localhost ESMTP\r\n");
-    socket.on("data", (chunk) => {
-      buffer += chunk.toString("utf8");
-      for (;;) {
-        if (inData) {
-          const end = buffer.indexOf("\r\n.\r\n");
-          if (end < 0) return;
-          mail.data = buffer.slice(0, end);
-          buffer = buffer.slice(end + 5);
-          inData = false;
-          mails.push(mail);
-          mail = { from: "", to: [], data: "" };
-          socket.write("250 OK\r\n");
-          continue;
-        }
-        const end = buffer.indexOf("\r\n");
-        if (end < 0) return;
-        const line = buffer.slice(0, end);
-        buffer = buffer.slice(end + 2);
-        const command = line.toUpperCase();
-        if (command.startsWith("EHLO")) {
-          socket.write("250-localhost\r\n250 8BITMIME\r\n");
-        } else if (command.startsWith("MAIL FROM:")) {
-          mail.from = line.slice(10).trim();
-          socket.write("250 OK\r\n");
-        } else if (command.startsWith("RCPT TO:")) {
-          mail.to.push(line.slice(8).trim());
-          socket.write("250 OK\r\n");
-        } else if (command === "DATA") {
-          inData = true;
-          socket.write("354 End data with <CR><LF>.<CR><LF>\r\n");
-        } else if (command === "QUIT") {
-          socket.end("221 Bye\r\n");
-          return;
-        } else {
-          socket.write("250 OK\r\n");
-        }
-      }
-    });
-  });
-  const port = await freePort();
-  await new Promise<void>((resolve) =>
-    server.listen(port, "127.0.0.1", resolve),
-  );
-  return {
-    port,
-    mails,
-    stop: () => new Promise<void>((resolve) => server.close(() => resolve())),
-  };
-}
 
 /** Members, hunt and helpers on an instance. */
 function fixtures(pb: () => TestInstance) {
