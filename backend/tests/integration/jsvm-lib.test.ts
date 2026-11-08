@@ -19,6 +19,8 @@ const { normalizeFrenchPhone } =
   require("../../pb_hooks/lib/phone.cjs") as typeof import("../../pb_hooks/lib/phone.cjs");
 const { isValidDay, parisToUtc, utcToParis, parseUtcDateTime } =
   require("../../pb_hooks/lib/paris-time.cjs") as typeof import("../../pb_hooks/lib/paris-time.cjs");
+const { smsSegments, toGsm7 } =
+  require("../../pb_hooks/lib/sms-encoding.cjs") as typeof import("../../pb_hooks/lib/sms-encoding.cjs");
 const { messageVariables, renderTemplate } =
   require("../../pb_hooks/lib/message-template.cjs") as typeof import("../../pb_hooks/lib/message-template.cjs");
 
@@ -58,7 +60,28 @@ routerAdd("POST", "/api/test/message-template", (e) => {
     ),
   );
 });
+
+routerAdd("POST", "/api/test/sms-encoding", (e) => {
+  const lib = require(\`\${__hooks}/lib/sms-encoding.cjs\`);
+  const inputs = e.requestInfo().body.inputs;
+  return e.json(
+    200,
+    inputs.map((text) => ({ size: lib.smsSegments(text), gsm7: lib.toGsm7(text) })),
+  );
+});
 `;
+
+/** Texts exercising both encodings, extension characters and emojis. */
+const SMS_TEXTS = [
+  "",
+  "Répondez à l'invitation",
+  "Fête du 15 août, l’heure « exacte »… ça va",
+  "{€}[~]|^\\",
+  "a".repeat(152) + "€" + "a".repeat(152),
+  "û".repeat(66) + "👍" + "û".repeat(66),
+  "oui 👍🏽 ❤️",
+  "8\u00a0h\u202f00\tici",
+];
 
 /** Phone numbers exercising separators and rejections. */
 const PHONES = [
@@ -266,6 +289,14 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
       instants: INSTANTS.map((instant) => utcToParis(new Date(instant))),
       datetimes: DATETIMES.map((value) => iso(parseUtcDateTime(value))),
     });
+  });
+
+  it("sizes and transliterates SMS exactly like Node", async () => {
+    expect(
+      await inJsvm(pocketbase.url, "sms-encoding", { inputs: SMS_TEXTS }),
+    ).toStrictEqual(
+      SMS_TEXTS.map((text) => ({ size: smsSegments(text), gsm7: toGsm7(text) })),
+    );
   });
 
   it("renders message templates exactly like Node", async () => {

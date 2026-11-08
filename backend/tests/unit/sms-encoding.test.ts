@@ -63,7 +63,7 @@ describe("smsSegments", () => {
       units: 164,
       segments: 2,
     });
-    expect(smsSegments("a".repeat(152) + "€" + "a".repeat(151)).segments).toBe(
+    expect(smsSegments("a".repeat(152) + "€" + "a".repeat(152)).segments).toBe(
       3,
     );
   });
