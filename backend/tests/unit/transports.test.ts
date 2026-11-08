@@ -104,7 +104,8 @@ describe("gatewayRequest", () => {
         textMessage: { text: "Bonjour" },
         phoneNumbers: [PHONE],
       }),
-      timeout: 15,
+      // A gateway on the local network answers fast: 5 s is plenty.
+      timeout: 5,
     });
   });
 
@@ -217,6 +218,70 @@ describe("createTransports: SMS gateway", () => {
     const error = thrown(() => sms.send({ to: PHONE, text: "x" }));
     expect(error).toMatch(/unreachable/);
     expect(error).not.toContain(PHONE);
+  });
+});
+
+describe("createTransports: SMS gateway unreachable", () => {
+  it("does not call the gateway again once it was unreachable", () => {
+    let attempts = 0;
+    const { io } = fakeIo({
+      httpSend: () => {
+        attempts++;
+        throw new Error("dial tcp: i/o timeout");
+      },
+    });
+    const { sms } = createTransports(gatewayConfig(), io);
+
+    const first = thrown(() => sms.send({ to: PHONE, text: "x" }));
+    const second = thrown(() => sms.send({ to: "+33639981001", text: "y" }));
+    const third = thrown(() => sms.send({ to: "+33639981002", text: "z" }));
+
+    expect(attempts).toBe(1);
+    expect(first).toMatch(/unreachable/);
+    expect(second).toMatch(/unreachable.*not retried/);
+    expect(third).toMatch(/unreachable.*not retried/);
+  });
+
+  it("keeps calling the gateway after an HTTP error answer", () => {
+    const statuses = [500, 202, 400, 202];
+    const { io, calls } = fakeIo({
+      httpSend: (request: unknown) => {
+        calls.http.push(request);
+        return { statusCode: statuses[calls.http.length - 1] ?? 202 };
+      },
+    });
+    const { sms } = createTransports(gatewayConfig(), io);
+
+    const errors = statuses.map((_, i) =>
+      thrown(() => sms.send({ to: PHONE, text: String(i) })),
+    );
+
+    expect(calls.http).toHaveLength(4);
+    expect(errors).toStrictEqual([
+      expect.stringContaining("HTTP 500"),
+      "",
+      expect.stringContaining("HTTP 400"),
+      "",
+    ]);
+  });
+
+  it("starts afresh with new transports (one sending each)", () => {
+    let attempts = 0;
+    const io = fakeIo({
+      httpSend: () => {
+        attempts++;
+        throw new Error("connection refused");
+      },
+    }).io;
+
+    thrown(() =>
+      createTransports(gatewayConfig(), io).sms.send({ to: PHONE, text: "x" }),
+    );
+    thrown(() =>
+      createTransports(gatewayConfig(), io).sms.send({ to: PHONE, text: "x" }),
+    );
+
+    expect(attempts).toBe(2);
   });
 });
 

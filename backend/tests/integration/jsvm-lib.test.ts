@@ -27,6 +27,8 @@ const invitations =
   require("../../pb_hooks/lib/invitations.cjs") as typeof import("../../pb_hooks/lib/invitations.cjs");
 const transports =
   require("../../pb_hooks/lib/transports.cjs") as typeof import("../../pb_hooks/lib/transports.cjs");
+const { redactAnswerTokens } =
+  require("../../pb_hooks/lib/log-redaction.cjs") as typeof import("../../pb_hooks/lib/log-redaction.cjs");
 const { messageVariables, renderTemplate, renderSms, DEFAULT_TEMPLATE_BODY } =
   require("../../pb_hooks/lib/message-template.cjs") as typeof import("../../pb_hooks/lib/message-template.cjs");
 
@@ -85,10 +87,13 @@ routerAdd("POST", "/api/test/waiting-list", (e) => {
 
 routerAdd("POST", "/api/test/invitations", (e) => {
   const lib = require(\`\${__hooks}/lib/invitations.cjs\`);
-  const { hunts, now, urls } = e.requestInfo().body;
+  const { hunts, now, urls, instants } = e.requestInfo().body;
   const at = new Date(now);
   return e.json(200, {
     links: urls.map((url) => lib.answerLink(url, "abc")),
+    deadlines: instants.map(([instant, date, meeting_time]) =>
+      lib.defaultDeadline({ date, meeting_time }, new Date(instant)),
+    ),
     hunts: hunts.map((hunt) => ({
       plan: lib.sendPlan(hunt, at),
       refusal: lib.answerRefusal(hunt, at),
@@ -114,6 +119,12 @@ routerAdd("POST", "/api/test/transports", (e) => {
       lib.gatewayRequest(config.sms, { to: "+33639981000", text }),
     ),
   });
+});
+
+routerAdd("POST", "/api/test/log-redaction", (e) => {
+  const lib = require(\`\${__hooks}/lib/log-redaction.cjs\`);
+  const inputs = e.requestInfo().body.inputs;
+  return e.json(200, inputs.map((text) => lib.redactAnswerTokens(text)));
 });
 
 routerAdd("POST", "/api/test/sms-encoding", (e) => {
@@ -237,6 +248,19 @@ const INVITATION_HUNTS = [
     response_deadline: "",
     status: "draft",
   },
+  // Around the default deadline (2026-11-10 20:00 Paris).
+  {
+    date: "2026-11-10",
+    meeting_time: "20:00",
+    response_deadline: "",
+    status: "draft",
+  },
+  {
+    date: "2026-11-10",
+    meeting_time: "20:01",
+    response_deadline: "",
+    status: "draft",
+  },
   {
     date: "2026-11-14",
     meeting_time: "08:00",
@@ -255,6 +279,23 @@ const INVITATION_HUNTS = [
     response_deadline: "2026-11-12 17:00:00.000Z",
     status: "closed",
   },
+];
+/**
+ * Sending times and hunts around midnight, daylight saving switches, year
+ * ends, and the day + 2 / day before / none rules.
+ */
+const DEADLINE_INSTANTS: [string, string, string][] = [
+  ["2026-11-08T22:59:00.000Z", "2027-06-01", "08:00"],
+  ["2026-11-08T23:30:00.000Z", "2027-06-01", "08:00"],
+  ["2026-03-27T12:00:00.000Z", "2026-03-29", "08:00"],
+  ["2026-03-27T12:00:00.000Z", "2026-04-01", "08:00"],
+  ["2026-10-23T22:30:00.000Z", "2026-10-25", "08:00"],
+  ["2026-10-23T10:00:00.000Z", "2026-10-26", "08:00"],
+  ["2026-12-30T15:00:00.000Z", "2027-01-01", "20:00"],
+  ["2028-02-27T12:00:00.000Z", "2028-03-01", "08:00"],
+  ["2026-11-08T10:00:00.000Z", "2026-11-09", "08:00"],
+  ["2026-11-08T19:30:00.000Z", "2026-11-09", "08:00"],
+  ["2026-11-08T10:00:00.000Z", "2026-11-08", "18:00"],
 ];
 const PUBLIC_URLS = [
   "https://diane.example.org/",
@@ -276,6 +317,17 @@ const TRANSPORT_ENV = {
   DIANE_SMS_GATEWAY_PASSWORD: "pässwörd",
   DIANE_EMAIL_TRANSPORT: "fake",
 };
+
+/** URLs and Referers with or without an answer token. */
+const LOG_URLS = [
+  "/api/diane/r/abcDEF123",
+  "/api/diane/r/abc%2Fdef?x=1",
+  "/r/abc/",
+  "https://diane.example.org/r/abc#top",
+  "/api/diane/r/",
+  "/api/diane/health",
+  "",
+];
 
 /** Phone numbers exercising separators and rejections. */
 const PHONES = [
@@ -511,9 +563,13 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
         hunts: INVITATION_HUNTS,
         now: INVITATION_NOW,
         urls: PUBLIC_URLS,
+        instants: DEADLINE_INSTANTS,
       }),
     ).toStrictEqual({
       links: PUBLIC_URLS.map((url) => invitations.answerLink(url, "abc")),
+      deadlines: DEADLINE_INSTANTS.map(([instant, date, meeting_time]) =>
+        invitations.defaultDeadline({ date, meeting_time }, new Date(instant)),
+      ),
       hunts: INVITATION_HUNTS.map((hunt) => ({
         plan: invitations.sendPlan(hunt, at),
         refusal: invitations.answerRefusal(hunt, at),
@@ -549,6 +605,12 @@ describe("pb_hooks/lib/ in PocketBase's JSVM", () => {
         transports.gatewayRequest(config.sms, { to: "+33639981000", text }),
       ),
     });
+  });
+
+  it("redacts answer tokens exactly like Node", async () => {
+    expect(
+      await inJsvm(pocketbase.url, "log-redaction", { inputs: LOG_URLS }),
+    ).toStrictEqual(LOG_URLS.map((text) => redactAnswerTokens(text)));
   });
 
   it("sizes and transliterates SMS exactly like Node", async () => {

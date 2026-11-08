@@ -4,7 +4,11 @@
 // Pure CommonJS: loaded by hooks with require(`${__hooks}/lib/invitations.cjs`)
 // and by Vitest with createRequire.
 
-const { parisToUtc, parseUtcDateTime } = require("./paris-time.cjs");
+const {
+  parisToUtc,
+  utcToParis,
+  parseUtcDateTime,
+} = require("./paris-time.cjs");
 const {
   formatFrenchDay,
   formatFrenchTime,
@@ -14,8 +18,13 @@ const {
   renderSms,
 } = require("./message-template.cjs");
 
-/** Default response deadline after sending (CLAUDE.md: +48 h). */
-const DEFAULT_DEADLINE_MS = 48 * 60 * 60 * 1000;
+/**
+ * Default response deadline (CLAUDE.md), at a time easy to read in a
+ * message: DEFAULT_DEADLINE_DAYS after the sending day at
+ * DEFAULT_DEADLINE_TIME (Paris), or the day before the hunt at that time.
+ */
+const DEFAULT_DEADLINE_DAYS = 2;
+const DEFAULT_DEADLINE_TIME = "20:00";
 
 /**
  * @typedef {object} Hunt
@@ -37,6 +46,46 @@ const DEFAULT_DEADLINE_MS = 48 * 60 * 60 * 1000;
  */
 function toPocketBaseDate(date) {
   return date.toISOString().replace("T", " ");
+}
+
+/**
+ * @param {string} day YYYY-MM-DD.
+ * @param {number} days
+ * @returns {string} YYYY-MM-DD, `days` later (or earlier when negative).
+ */
+function addDays(day, days) {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(
+    Date.UTC(Number(year), Number(month) - 1, Number(date) + days),
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
+/**
+ * Default response deadline of invitations to `hunt` sent at `now` (Paris
+ * times):
+ * - the sending day + 2 days at 20:00, if strictly before the hunt starts
+ *   (sent on Sunday 11:00 -> Tuesday 20:00);
+ * - else the day before the hunt at 20:00, if still ahead;
+ * - else none (null): the organizer must set one.
+ *
+ * @param {{ date: string, meeting_time: string }} hunt
+ * @param {Date} now
+ * @returns {string | null} PocketBase UTC datetime.
+ */
+function defaultDeadline(hunt, now) {
+  const start = parisToUtc(hunt.date, hunt.meeting_time).getTime();
+  const dayPlus2 = parisToUtc(
+    addDays(utcToParis(now).day, DEFAULT_DEADLINE_DAYS),
+    DEFAULT_DEADLINE_TIME,
+  );
+  if (dayPlus2.getTime() < start) return toPocketBaseDate(dayPlus2);
+  const dayBefore = parisToUtc(addDays(hunt.date, -1), DEFAULT_DEADLINE_TIME);
+  if (dayBefore.getTime() > now.getTime() && dayBefore.getTime() < start) {
+    return toPocketBaseDate(dayBefore);
+  }
+  return null;
 }
 
 /**
@@ -97,18 +146,16 @@ function sendPlan(hunt, now) {
     }
     return { ok: true, deadline: null };
   }
-  const byDefault = new Date(now.getTime() + DEFAULT_DEADLINE_MS);
-  if (
-    byDefault.getTime() >= parisToUtc(hunt.date, hunt.meeting_time).getTime()
-  ) {
+  const byDefault = defaultDeadline(hunt, now);
+  if (byDefault === null) {
     return {
       ok: false,
       code: "deadline_missing",
       message:
-        "La battue a lieu dans moins de 48 h : fixez une date limite de réponse.",
+        "La battue est trop proche pour une date limite par défaut (la veille à 20h00 est passée) : fixez une date limite de réponse.",
     };
   }
-  return { ok: true, deadline: toPocketBaseDate(byDefault) };
+  return { ok: true, deadline: byDefault };
 }
 
 /**
@@ -204,6 +251,40 @@ function invitationMessages({ body, hunt, link, several }) {
   };
 }
 
+/**
+ * A channel left `sending` longer than this was abandoned (a sending request
+ * takes seconds: one gateway timeout of 5 s at most, then a few hundred ms
+ * per message): `resend-failed` takes it over.
+ */
+const STALE_SENDING_MS = 10 * 60 * 1000;
+
+/**
+ * Channels of a pending invitation that `resend-failed` sends: failed ones,
+ * ones left `sending` by an interrupted request (older than the last
+ * PocketBase start, or than STALE_SENDING_MS), and ones never sent
+ * (empty status) once the hunt's invitations were sent.
+ *
+ * @param {{ sms_status: string, email_status: string, updated: string }} invitation
+ * @param {{ huntSent: boolean, bootedAt: Date | null, now: Date }} context
+ * @returns {{ sms: boolean, email: boolean }}
+ */
+function channelsToResend(invitation, { huntSent, bootedAt, now }) {
+  const updated = parseUtcDateTime(invitation.updated);
+  const abandoned =
+    updated !== null &&
+    ((bootedAt !== null && updated.getTime() < bootedAt.getTime()) ||
+      now.getTime() - updated.getTime() >= STALE_SENDING_MS);
+  /** @param {string} status */
+  const resend = (status) =>
+    status === "failed" ||
+    (status === "sending" && abandoned) ||
+    (status === "" && huntSent);
+  return {
+    sms: resend(invitation.sms_status),
+    email: resend(invitation.email_status),
+  };
+}
+
 /** @typedef {"sent" | "failed" | "skipped"} SendStatus */
 
 /**
@@ -227,11 +308,14 @@ function sendSummary(results) {
 
 module.exports = {
   toPocketBaseDate,
+  defaultDeadline,
   answerLink,
   sendPlan,
   answerRefusal,
   isOpenInvitation,
   publicAnswerView,
   invitationMessages,
+  STALE_SENDING_MS,
+  channelsToResend,
   sendSummary,
 };

@@ -30,6 +30,8 @@ export interface TestInstance {
   organizerToken: string;
   /** Messages recorded by the fake transports, in no particular order. */
   outbox(): Promise<OutboxMessage[]>;
+  /** Stops PocketBase and starts it again on the same data (new port). */
+  restart(): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -86,25 +88,33 @@ export async function startTestInstance({
   rateLimited = false,
 }: TestInstanceOptions = {}): Promise<TestInstance> {
   const outboxDir = await mkdtemp(path.join(tmpdir(), "diane-outbox-"));
+  const dataDir = await mkdtemp(path.join(tmpdir(), "diane-pb-test-"));
   const superuser = {
     email: "superuser@diane.test",
     password: randomBytes(16).toString("hex"),
   };
-  const process = await startPocketBase({
+  const pocketbaseEnv = {
+    DIANE_PUBLIC_URL: TEST_PUBLIC_URL,
+    DIANE_SMS_TRANSPORT: "fake",
+    DIANE_EMAIL_TRANSPORT: "fake",
+    DIANE_FAKE_OUTBOX_DIR: outboxDir,
+    DIANE_SMS_GATEWAY_URL: "",
+    DIANE_SMS_GATEWAY_USERNAME: "",
+    DIANE_SMS_GATEWAY_PASSWORD: "",
+    DIANE_EMAIL_SENDER_ADDRESS: "",
+    DIANE_EMAIL_SENDER_NAME: "",
+    ...env,
+  };
+  let process = await startPocketBase({
     superuser,
-    env: {
-      DIANE_PUBLIC_URL: TEST_PUBLIC_URL,
-      DIANE_SMS_TRANSPORT: "fake",
-      DIANE_EMAIL_TRANSPORT: "fake",
-      DIANE_FAKE_OUTBOX_DIR: outboxDir,
-      DIANE_SMS_GATEWAY_URL: "",
-      DIANE_SMS_GATEWAY_USERNAME: "",
-      DIANE_SMS_GATEWAY_PASSWORD: "",
-      DIANE_EMAIL_SENDER_ADDRESS: "",
-      DIANE_EMAIL_SENDER_NAME: "",
-      ...env,
-    },
+    dataDir,
+    env: pocketbaseEnv,
   });
+  const cleanUp = async () => {
+    await process.stop();
+    await rm(outboxDir, { recursive: true, force: true });
+    await rm(dataDir, { recursive: true, force: true });
+  };
   const api = (pathname: string, options?: RequestOptions) =>
     callApi(process.url, pathname, options);
 
@@ -151,7 +161,9 @@ export async function startTestInstance({
     );
 
     return {
-      process,
+      get process() {
+        return process;
+      },
       api,
       superuserToken,
       organizerToken,
@@ -164,14 +176,14 @@ export async function startTestInstance({
           })),
         );
       },
-      async stop() {
+      async restart() {
         await process.stop();
-        await rm(outboxDir, { recursive: true, force: true });
+        process = await startPocketBase({ dataDir, env: pocketbaseEnv });
       },
+      stop: cleanUp,
     };
   } catch (error) {
-    await process.stop();
-    await rm(outboxDir, { recursive: true, force: true });
+    await cleanUp();
     throw error;
   }
 }

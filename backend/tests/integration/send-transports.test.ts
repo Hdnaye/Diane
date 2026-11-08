@@ -3,119 +3,18 @@
 // server. Also: what happens when nothing is configured, and PocketBase's
 // output never contains a phone number or an e-mail address.
 import { randomBytes } from "node:crypto";
-import { createServer as createHttpServer, type Server } from "node:http";
-import { createServer as createTcpServer } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { huntDays, phoneNumbers, recordsPath, uniqueEmail } from "./api.js";
+import {
+  startFakeGateway,
+  startFakeSmtp,
+  startSilentGateway,
+} from "./fake-servers.js";
 import { startTestInstance, type TestInstance } from "./instance.js";
-import { freePort } from "./pocketbase-process.js";
 
 const nextPhone = phoneNumbers(42);
 const nextDay = huntDays(2114);
 const DEADLINE = "2113-12-01 17:00:00.000Z";
-
-interface GatewayRequest {
-  method: string;
-  url: string;
-  authorization: string;
-  body: unknown;
-}
-
-/** HTTP server answering like SMS Gateway for Android, recording requests. */
-async function startFakeGateway() {
-  const requests: GatewayRequest[] = [];
-  let status = 202;
-  const server: Server = createHttpServer((request, response) => {
-    let body = "";
-    request.on("data", (chunk) => (body += chunk));
-    request.on("end", () => {
-      requests.push({
-        method: request.method ?? "",
-        url: request.url ?? "",
-        authorization: request.headers.authorization ?? "",
-        body: JSON.parse(body || "null"),
-      });
-      response.writeHead(status, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ id: "x", state: "Pending" }));
-    });
-  });
-  const port = await freePort();
-  await new Promise<void>((resolve) =>
-    server.listen(port, "127.0.0.1", resolve),
-  );
-  return {
-    url: `http://127.0.0.1:${port}`,
-    requests,
-    answerWith(code: number) {
-      status = code;
-    },
-    stop: () => new Promise<void>((resolve) => server.close(() => resolve())),
-  };
-}
-
-interface Mail {
-  from: string;
-  to: string[];
-  data: string;
-}
-
-/** Minimal SMTP server (no TLS, no auth) recording the mails. */
-async function startFakeSmtp() {
-  const mails: Mail[] = [];
-  const server = createTcpServer((socket) => {
-    let buffer = "";
-    let inData = false;
-    let mail: Mail = { from: "", to: [], data: "" };
-    socket.write("220 localhost ESMTP\r\n");
-    socket.on("data", (chunk) => {
-      buffer += chunk.toString("utf8");
-      for (;;) {
-        if (inData) {
-          const end = buffer.indexOf("\r\n.\r\n");
-          if (end < 0) return;
-          mail.data = buffer.slice(0, end);
-          buffer = buffer.slice(end + 5);
-          inData = false;
-          mails.push(mail);
-          mail = { from: "", to: [], data: "" };
-          socket.write("250 OK\r\n");
-          continue;
-        }
-        const end = buffer.indexOf("\r\n");
-        if (end < 0) return;
-        const line = buffer.slice(0, end);
-        buffer = buffer.slice(end + 2);
-        const command = line.toUpperCase();
-        if (command.startsWith("EHLO")) {
-          socket.write("250-localhost\r\n250 8BITMIME\r\n");
-        } else if (command.startsWith("MAIL FROM:")) {
-          mail.from = line.slice(10).trim();
-          socket.write("250 OK\r\n");
-        } else if (command.startsWith("RCPT TO:")) {
-          mail.to.push(line.slice(8).trim());
-          socket.write("250 OK\r\n");
-        } else if (command === "DATA") {
-          inData = true;
-          socket.write("354 End data with <CR><LF>.<CR><LF>\r\n");
-        } else if (command === "QUIT") {
-          socket.end("221 Bye\r\n");
-          return;
-        } else {
-          socket.write("250 OK\r\n");
-        }
-      }
-    });
-  });
-  const port = await freePort();
-  await new Promise<void>((resolve) =>
-    server.listen(port, "127.0.0.1", resolve),
-  );
-  return {
-    port,
-    mails,
-    stop: () => new Promise<void>((resolve) => server.close(() => resolve())),
-  };
-}
 
 /** Members, hunt and helpers on an instance. */
 function fixtures(pb: () => TestInstance) {
@@ -302,6 +201,29 @@ describe("invitations through the SMS gateway and SMTP", () => {
     }
   });
 
+  it("keeps sending the next SMS after an HTTP error answer", async () => {
+    const members = [await f.newMember(), await f.newMember()];
+    for (const member of members) {
+      sensitive.push(member.phone as string, member.email as string);
+    }
+    const hunt = await f.newHunt();
+    const before = gateway.requests.length;
+    gateway.answerWith(503);
+
+    try {
+      const response = await f.send(hunt.id);
+
+      expect(response.body.sms).toStrictEqual({
+        sent: 0,
+        failed: 2,
+        skipped: 0,
+      });
+      expect(gateway.requests.length - before).toBe(2);
+    } finally {
+      gateway.answerWith(202);
+    }
+  });
+
   it("prints no phone number, e-mail address or gateway secret", () => {
     expect(sensitive.length).toBeGreaterThan(1);
     expectNoPersonalData(pb.process.output(), sensitive);
@@ -356,6 +278,93 @@ describe("invitations without SMS gateway nor SMTP", () => {
     expect(sensitive.length).toBeGreaterThan(1);
     expectNoPersonalData(pb.process.output(), sensitive);
   });
+});
+
+describe("invitations through a gateway that does not answer", () => {
+  let pb: TestInstance;
+  let gateway: Awaited<ReturnType<typeof startSilentGateway>>;
+  const f = fixtures(() => pb);
+
+  beforeAll(async () => {
+    gateway = await startSilentGateway();
+    pb = await startTestInstance({
+      env: {
+        DIANE_SMS_TRANSPORT: "",
+        DIANE_SMS_GATEWAY_URL: gateway.url,
+        DIANE_SMS_GATEWAY_USERNAME: "sms",
+        DIANE_SMS_GATEWAY_PASSWORD: randomBytes(16).toString("hex"),
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await pb?.stop();
+    await gateway?.stop();
+  });
+
+  it(
+    "gives up after one timeout instead of waiting for every SMS",
+    { timeout: 30_000 },
+    async () => {
+      for (let i = 0; i < 4; i++) await f.newMember();
+      const hunt = await f.newHunt();
+      const start = Date.now();
+
+      const response = await f.send(hunt.id);
+
+      const elapsed = Date.now() - start;
+      expect(response.status).toBe(200);
+      expect(response.body).toStrictEqual({
+        invited: 4,
+        sms: { sent: 0, failed: 4, skipped: 0 },
+        email: { sent: 4, failed: 0, skipped: 0 },
+      });
+      expect(gateway.connections()).toBe(1);
+      // One 5 s timeout, not 4 x 15 s.
+      expect(elapsed).toBeGreaterThanOrEqual(4_500);
+      expect(elapsed).toBeLessThan(9_000);
+    },
+  );
+
+  it(
+    "marks the channels being sent, and goes on after an error on one member",
+    { timeout: 30_000 },
+    async () => {
+      await f.deactivateEveryone();
+      const first = await f.newMember();
+      const deleted = await f.newMember();
+      const last = await f.newMember();
+      const hunt = await f.newHunt();
+
+      const sending = f.send(hunt.id);
+      // While the first SMS waits for the gateway (5 s):
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      const during = await f.invitationOf(hunt.id, last.id);
+      // Deleting the member deletes its invitation: the loop meets an
+      // invitation that no longer exists.
+      const removed = await pb.api(recordsPath("members", deleted.id), {
+        method: "DELETE",
+        token: pb.organizerToken,
+      });
+      const response = await sending;
+
+      expect(during).toMatchObject({
+        sms_status: "sending",
+        email_status: "sending",
+      });
+      expect(removed.status).toBe(204);
+      expect(response.status).toBe(200);
+      expect(response.body.invited).toBe(3);
+      expect(await f.invitationOf(hunt.id, first.id)).toMatchObject({
+        sms_status: "failed",
+        email_status: "sent",
+      });
+      expect(await f.invitationOf(hunt.id, last.id)).toMatchObject({
+        sms_status: "failed",
+        email_status: "sent",
+      });
+    },
+  );
 });
 
 describe("invitations without public URL", () => {

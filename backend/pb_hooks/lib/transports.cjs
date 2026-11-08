@@ -18,8 +18,11 @@
 // Pure CommonJS: loaded by hooks with require(`${__hooks}/lib/transports.cjs`)
 // and by Vitest with createRequire.
 
-/** Seconds before giving up on the SMS gateway. */
-const GATEWAY_TIMEOUT_S = 15;
+/**
+ * Seconds before giving up on the SMS gateway: a phone on the local network
+ * (or the cloud relay) answers in well under a second.
+ */
+const GATEWAY_TIMEOUT_S = 5;
 
 /**
  * @typedef {object} SmsConfig
@@ -178,6 +181,12 @@ function createTransports(config, io) {
     },
   });
 
+  // Once the gateway was unreachable (connection refused, timeout, DNS),
+  // the next SMS of these transports (one sending) fail at once: a phone
+  // switched off would otherwise cost one timeout per SMS. An HTTP error
+  // answer concerns one message: the next ones are still sent.
+  let unreachable = false;
+
   /** @type {Transport<SmsMessage>} */
   const gateway = {
     send(message) {
@@ -185,10 +194,14 @@ function createTransports(config, io) {
       if (!url || !username || !password) {
         throw new Error("SMS gateway not configured.");
       }
+      if (unreachable) {
+        throw new Error("SMS gateway unreachable (not retried).");
+      }
       let response;
       try {
         response = io.httpSend(gatewayRequest(config.sms, message));
       } catch {
+        unreachable = true;
         // The cause may quote the request: not repeated.
         throw new Error("SMS gateway unreachable.");
       }
