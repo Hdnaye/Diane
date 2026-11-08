@@ -26,8 +26,10 @@ si l'idée prend.
 - Calendrier : création de battues. Plusieurs battues par semaine possibles,
   au plus une par jour.
 - Nombre maximum de participants par battue (optionnel). Une fois complet,
-  les « oui » suivants passent en liste d'attente. Gestion des désistements :
-  à définir avec l'organisateur.
+  les « oui » suivants passent en liste d'attente. Quand une place se libère,
+  un nouveau « oui » passe derrière les adhérents déjà en liste d'attente ;
+  c'est l'organisateur qui fait monter quelqu'un de la liste (pas de
+  promotion automatique).
 - Invitation par SMS et e-mail à tous les adhérents : présence oui/non.
 - Message modèle réutilisable avec variables : date, heure, date limite
   de réponse (défaut : +48 h).
