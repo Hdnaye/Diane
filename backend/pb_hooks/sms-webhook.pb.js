@@ -64,12 +64,21 @@ routerAdd("POST", "/api/diane/sms/webhook", (e) => {
   if (!secret) {
     logger.warn("SMS webhook refused: DIANE_SMS_WEBHOOK_SECRET not set");
   }
-  if (
-    !secret ||
-    !inbound.timestampFresh(timestamp, now) ||
-    !/^[0-9a-f]{64}$/.test(signature) ||
-    !$security.equal($security.hs256(raw + timestamp, secret), signature)
-  ) {
+  const signed =
+    secret !== "" &&
+    /^[0-9a-f]{64}$/.test(signature) &&
+    $security.equal($security.hs256(raw + timestamp, secret), signature);
+  if (!signed) throw new UnauthorizedError("Unauthorized.");
+  if (!inbound.timestampFresh(timestamp, now)) {
+    // Signed by the gateway but out of the window: its clock is probably
+    // off (automatic network time disabled). The skew only, nothing else.
+    if (/^\d{1,12}$/.test(timestamp)) {
+      logger.warn(
+        "SMS webhook refused: clock skew",
+        "skew_s",
+        Math.round(now.getTime() / 1000 - Number(timestamp)),
+      );
+    }
     throw new UnauthorizedError("Unauthorized.");
   }
 
@@ -163,6 +172,7 @@ routerAdd("POST", "/api/diane/sms/webhook", (e) => {
           byId[invitation.id] = invitation;
           return {
             id: invitation.id,
+            participation: invitation.getString("participation"),
             hunt: huntFields(
               txApp.findRecordById("hunts", invitation.getString("hunt")),
             ),

@@ -11,6 +11,10 @@ const { transportConfig, createTransports, deliver } =
   /** @type {typeof import("../lib/transports.cjs")} */ (
     require(`${__hooks}/lib/transports.cjs`)
   );
+const { noticeRecord } =
+  /** @type {typeof import("../lib/notifications.cjs")} */ (
+    require(`${__hooks}/lib/notifications.cjs`)
+  );
 
 /**
  * SMS and e-mail transports, from the environment variables and the admin
@@ -64,6 +68,9 @@ function appTransports(app) {
  *   `sms_status` / `email_status`.
  * @property {(invitation: core.Record, member: core.Record) => Messages} compose
  * @property {string} label Kind of message in logs, e.g. "Invitation".
+ * @property {{ sms: string, email: string }} [attempts] Attempt counters of
+ *   a notice (reminder, cancellation): the outcome is then recorded with
+ *   noticeRecord (timeout → `unknown`, attempts counted).
  */
 
 /**
@@ -82,7 +89,12 @@ function appTransports(app) {
  * @param {SendOptions} options
  * @returns {{ sms_status: string, email_status: string }}
  */
-function sendClaimed(app, transports, item, { fields, compose, label }) {
+function sendClaimed(
+  app,
+  transports,
+  item,
+  { fields, compose, label, attempts },
+) {
   /** @type {{ sms_status: string, email_status: string }} */
   const result = { sms_status: "", email_status: "" };
   /** @param {"sms" | "email"} channel */
@@ -148,9 +160,19 @@ function sendClaimed(app, transports, item, { fields, compose, label }) {
             outcome.error,
           );
       }
-      result[key(channel)] = outcome.status;
       const current = app.findRecordById("invitations", item.id);
-      current.set(field, outcome.status);
+      /** @type {string} */
+      let status = outcome.status;
+      if (attempts) {
+        const recorded = noticeRecord(
+          outcome,
+          current.getInt(attempts[channel]),
+        );
+        status = recorded.status;
+        current.set(attempts[channel], recorded.attempts);
+      }
+      result[key(channel)] = status;
+      current.set(field, status);
       app.save(current);
       expected = current.getString("updated");
     }

@@ -113,6 +113,7 @@ function isOwnNumber(sender, ownNumbers) {
 /**
  * @typedef {object} MemberInvitation
  * @property {string} id
+ * @property {string} participation
  * @property {import("./invitations.cjs").Hunt} hunt
  */
 
@@ -120,15 +121,18 @@ function isOwnNumber(sender, ownNumbers) {
  * @typedef {{ action: "apply", invitationId: string, answer: "yes" | "no" }
  *   | { action: "cancelled", invitationId: string }
  *   | { action: "review", reason: string }} Resolution
- * review reasons: no_open_invitation, several_open_invitations, unknown_day,
- * ambiguous_day, deadline_passed, hunt_closed.
+ * review reasons: no_open_invitation, several_open_invitations, ambiguous,
+ * unknown_day, ambiguous_day, deadline_passed, hunt_closed.
  */
 
 /**
  * Which invitation of a member a recognized SMS reply applies to. Only the
  * invitations of hunts sent (not drafts) and not started yet count; an
  * invitation is open while the member may answer (answered or not).
- * - Without a day: the single open invitation; several or none → review.
+ * - Without a day: the single open invitation; several or none → review,
+ *   and also when another upcoming hunt (not cancelled) still waits for
+ *   the member's answer, deadline passed (in doubt, to check: a late reply
+ *   for tomorrow's hunt must not land on next week's).
  *   None open but a single upcoming hunt, cancelled → "cancelled".
  * - With a day: the hunt of that day of the month; none or several (months
  *   apart) → review; cancelled → "cancelled"; deadline passed or closed →
@@ -169,6 +173,13 @@ function resolveSmsReply(reply, invitations, now) {
   );
   if (open.length === 1) {
     const match = /** @type {MemberInvitation} */ (open[0]);
+    const otherPending = upcoming.some(
+      (invitation) =>
+        invitation.id !== match.id &&
+        invitation.participation === "pending" &&
+        invitation.hunt.status !== "cancelled",
+    );
+    if (otherPending) return { action: "review", reason: "ambiguous" };
     return { action: "apply", invitationId: match.id, answer: reply.answer };
   }
   if (open.length > 1) {

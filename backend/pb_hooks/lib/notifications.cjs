@@ -13,9 +13,17 @@ const {
   formatFrenchDeadline,
 } = require("./message-template.cjs");
 const { toGsm7 } = require("./sms-encoding.cjs");
+const { channelsToResend } = require("./invitations.cjs");
 
 /** The reminder is sent this long before the response deadline. */
 const REMINDER_BEFORE_DEADLINE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A reminder or cancellation notice is attempted at most this many times
+ * per channel (automatic retries of the reminder cron, repeated calls of
+ * the cancel route): a member never gets a flood of messages.
+ */
+const MAX_NOTICE_ATTEMPTS = 3;
 
 /**
  * @typedef {object} HuntFields
@@ -48,8 +56,14 @@ function confirmationSms(outcome, hunt) {
     absent: `Absence enregistrée pour la battue du ${day}.`,
     waiting_list: `Vous êtes sur liste d'attente pour la battue du ${day}.`,
   }[outcome];
+  const dayOfMonth = Number(hunt.date.slice(8, 10));
+  const change = `Pour changer, renvoyez OUI ${dayOfMonth} ou NON ${dayOfMonth}`;
   const limit = deadlineLabel(hunt);
-  return toGsm7(limit ? `${recorded} Modifiable jusqu'au ${limit}.` : recorded);
+  return toGsm7(
+    limit
+      ? `${recorded} ${change} avant le ${limit}.`
+      : `${recorded} ${change}.`,
+  );
 }
 
 /**
@@ -67,7 +81,7 @@ function reminderMessages(hunt, link) {
   const limit = deadlineLabel(hunt);
   return {
     sms: toGsm7(
-      `Rappel : battue du ${day} à ${time}. Répondez par SMS OUI ${dayOfMonth} ou NON ${dayOfMonth} avant le ${limit}.`,
+      `Rappel : battue du ${day} à ${time}. Vous n'avez pas encore répondu. Répondez par SMS OUI ${dayOfMonth} ou NON ${dayOfMonth} avant le ${limit}.`,
     ),
     email: {
       subject: `Rappel : battue du ${day}`,
@@ -118,8 +132,76 @@ function reminderDue(hunt, now) {
   );
 }
 
+/**
+ * @typedef {object} NoticeState Reminder or cancellation notice of an
+ *   invitation, per channel.
+ * @property {string} sms_status
+ * @property {string} email_status
+ * @property {number} sms_attempts
+ * @property {number} email_attempts
+ * @property {string} updated
+ */
+
+/**
+ * Channels of a notice to send (or send again): like channelsToResend
+ * (failed, interrupted `sending`, never sent when `huntSent`), but a failed
+ * channel only while attempted less than MAX_NOTICE_ATTEMPTS times, and
+ * never an `unknown` one (timed out: it may have been sent).
+ *
+ * @param {NoticeState} notice
+ * @param {{ huntSent: boolean, bootedAt: Date | null, now: Date }} context
+ * @returns {{ sms: boolean, email: boolean }}
+ */
+function noticeChannelsToSend(notice, context) {
+  const channels = channelsToResend(notice, context);
+  return {
+    sms: channels.sms && notice.sms_attempts < MAX_NOTICE_ATTEMPTS,
+    email: channels.email && notice.email_attempts < MAX_NOTICE_ATTEMPTS,
+  };
+}
+
+/**
+ * Status and attempt count to record after sending a notice channel: a
+ * timeout becomes `unknown` (may have been sent, never retried
+ * automatically); a message not attempted (gateway already unreachable,
+ * not configured) or skipped does not count as an attempt.
+ *
+ * @param {{ status: string, kind: string }} outcome Result of deliver().
+ * @param {number} attempts Attempts before this one.
+ * @returns {{ status: string, attempts: number }}
+ */
+function noticeRecord(outcome, attempts) {
+  if (outcome.status === "skipped") return { status: "skipped", attempts };
+  if (outcome.kind === "not_attempted") return { status: "failed", attempts };
+  return {
+    status: outcome.kind === "timeout" ? "unknown" : outcome.status,
+    attempts: attempts + 1,
+  };
+}
+
+/**
+ * Order in which claimed notices are sent: least attempted first, in a
+ * random order otherwise, so that a slow or unreachable gateway (the rest
+ * of a sending is cut off after it) never keeps hitting the same member
+ * first while the others wait.
+ *
+ * @template {{ attempts: number }} T
+ * @param {T[]} items
+ * @returns {T[]} A new array.
+ */
+function sendingOrder(items) {
+  return items
+    .map((item) => ({ item, rank: Math.random() }))
+    .sort((a, b) => a.item.attempts - b.item.attempts || a.rank - b.rank)
+    .map(({ item }) => item);
+}
+
 module.exports = {
   REMINDER_BEFORE_DEADLINE_MS,
+  MAX_NOTICE_ATTEMPTS,
+  noticeChannelsToSend,
+  noticeRecord,
+  sendingOrder,
   confirmationSms,
   reminderMessages,
   cancellationMessages,

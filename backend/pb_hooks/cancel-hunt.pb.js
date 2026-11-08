@@ -9,7 +9,9 @@
 // (cancellation_sms_status / cancellation_email_status: sending, then
 // sent / failed / skipped) in a transaction, like invitations; calling it
 // again only resends the notices failed or left `sending` by an
-// interrupted request. Answers { notified, sms: {...}, email: {...} }.
+// interrupted request, at most 3 attempts per channel, never one that
+// timed out (`unknown`: it may have been sent; noticeChannelsToSend).
+// Answers { notified, sms: {...}, email: {...} } (`unknown` not counted).
 
 routerAdd(
   "POST",
@@ -18,7 +20,7 @@ routerAdd(
     const lib = /** @type {typeof import("./lib/invitations.cjs")} */ (
       require(`${__hooks}/lib/invitations.cjs`)
     );
-    const { cancellationMessages } =
+    const { cancellationMessages, noticeChannelsToSend, sendingOrder } =
       /** @type {typeof import("./lib/notifications.cjs")} */ (
         require(`${__hooks}/lib/notifications.cjs`)
       );
@@ -39,7 +41,7 @@ routerAdd(
       throw new NotFoundError("Hunt not found.");
     }
 
-    /** @type {import("./shared/messaging.cjs").ClaimedItem[]} */
+    /** @type {(import("./shared/messaging.cjs").ClaimedItem & { attempts: number })[]} */
     const toSend = [];
     e.app.runInTransaction((txApp) => {
       const hunt = txApp.findRecordById("hunts", huntId);
@@ -68,10 +70,14 @@ routerAdd(
       );
       for (const invitation of invitations) {
         if (!invitation) continue;
-        const channels = lib.channelsToResend(
+        const smsAttempts = invitation.getInt("cancellation_sms_attempts");
+        const emailAttempts = invitation.getInt("cancellation_email_attempts");
+        const channels = noticeChannelsToSend(
           {
             sms_status: invitation.getString("cancellation_sms_status"),
             email_status: invitation.getString("cancellation_email_status"),
+            sms_attempts: smsAttempts,
+            email_attempts: emailAttempts,
             updated: invitation.getString("updated"),
           },
           context,
@@ -86,6 +92,7 @@ routerAdd(
           id: invitation.id,
           ...channels,
           claimed: invitation.getString("updated"),
+          attempts: smsAttempts + emailAttempts,
         });
       }
     });
@@ -94,11 +101,15 @@ routerAdd(
       huntFields(e.app.findRecordById("hunts", huntId)),
     );
     const transports = appTransports(e.app);
-    const results = toSend.map((item) =>
+    const results = sendingOrder(toSend).map((item) =>
       sendClaimed(e.app, transports, item, {
         fields: {
           sms: "cancellation_sms_status",
           email: "cancellation_email_status",
+        },
+        attempts: {
+          sms: "cancellation_sms_attempts",
+          email: "cancellation_email_attempts",
         },
         compose: () => messages,
         label: "Cancellation notice",

@@ -161,8 +161,27 @@ function gatewayRequest(config, message) {
 
 /**
  * @template M
- * @typedef {{ send: (message: M) => void }} Transport Throws on failure.
+ * @typedef {{ send: (message: M) => void }} Transport Throws on failure,
+ *   an Error whose `kind` property is a FailureKind.
  */
+
+/**
+ * @typedef {"failed" | "timeout" | "not_attempted"} FailureKind
+ * - failed: attempted and refused (connection refused, HTTP error, SMTP
+ *   error): not sent;
+ * - timeout: no answer in time once connected: the message may have been
+ *   sent (a slow phone accepts it after the timeout);
+ * - not_attempted: nothing sent (not configured, or gateway already found
+ *   unreachable during this sending).
+ */
+
+/**
+ * @param {string} message Without personal data.
+ * @param {FailureKind} kind
+ */
+function failure(message, kind) {
+  return Object.assign(new Error(message), { kind });
+}
 
 /**
  * @param {TransportConfig} config
@@ -175,7 +194,10 @@ function createTransports(config, io) {
     /** @param {SmsMessage | EmailMessage} message */
     send(message) {
       if (!config.outboxDir) {
-        throw new Error("Fake transport without outbox directory.");
+        throw failure(
+          "Fake transport without outbox directory.",
+          "not_attempted",
+        );
       }
       io.record(kind, message);
     },
@@ -192,21 +214,39 @@ function createTransports(config, io) {
     send(message) {
       const { url, username, password } = config.sms;
       if (!url || !username || !password) {
-        throw new Error("SMS gateway not configured.");
+        throw failure("SMS gateway not configured.", "not_attempted");
       }
       if (unreachable) {
-        throw new Error("SMS gateway unreachable (not retried).");
+        throw failure(
+          "SMS gateway unreachable (not retried).",
+          "not_attempted",
+        );
       }
       let response;
       try {
         response = io.httpSend(gatewayRequest(config.sms, message));
-      } catch {
+      } catch (cause) {
         unreachable = true;
-        // The cause may quote the request: not repeated.
-        throw new Error("SMS gateway unreachable.");
+        // The cause may quote the request: only classified, not repeated.
+        // No connection at all ("dial tcp ...", even an i/o timeout): not
+        // sent. A timeout once connected: the phone may have taken it.
+        const text = String(cause instanceof Error ? cause.message : cause);
+        if (
+          !/dial tcp/i.test(text) &&
+          /deadline exceeded|timeout|timed out/i.test(text)
+        ) {
+          throw failure(
+            "SMS gateway did not answer in time (the SMS may have been sent).",
+            "timeout",
+          );
+        }
+        throw failure("SMS gateway unreachable.", "failed");
       }
       if (response.statusCode < 200 || response.statusCode > 299) {
-        throw new Error(`SMS gateway answered HTTP ${response.statusCode}.`);
+        throw failure(
+          `SMS gateway answered HTTP ${response.statusCode}.`,
+          "failed",
+        );
       }
     },
   };
@@ -214,9 +254,13 @@ function createTransports(config, io) {
   /** @type {Transport<EmailMessage>} */
   const smtp = {
     send(message) {
-      if (!io.smtpEnabled) throw new Error("SMTP not configured.");
+      if (!io.smtpEnabled) {
+        throw failure("SMTP not configured.", "not_attempted");
+      }
       const address = config.email.senderAddress || io.defaultSender.address;
-      if (!address) throw new Error("No e-mail sender address.");
+      if (!address) {
+        throw failure("No e-mail sender address.", "not_attempted");
+      }
       const name = config.email.senderAddress
         ? config.email.senderName
         : io.defaultSender.name;
@@ -229,7 +273,7 @@ function createTransports(config, io) {
         });
       } catch {
         // SMTP errors may quote the recipient: not repeated.
-        throw new Error("SMTP sending failed.");
+        throw failure("SMTP sending failed.", "failed");
       }
     },
   };
@@ -246,18 +290,21 @@ function createTransports(config, io) {
  * @template {{ to: string }} M
  * @param {Transport<M>} transport
  * @param {M} message
- * @returns {{ status: "sent" | "failed" | "skipped", error: string }}
- *   error: reason of a failure, without personal data.
+ * @returns {{ status: "sent" | "failed" | "skipped", error: string, kind: FailureKind | "" }}
+ *   error: reason of a failure, without personal data; kind: its kind
+ *   ("" unless failed).
  */
 function deliver(transport, message) {
-  if (!message.to) return { status: "skipped", error: "" };
+  if (!message.to) return { status: "skipped", error: "", kind: "" };
   try {
     transport.send(message);
-    return { status: "sent", error: "" };
+    return { status: "sent", error: "", kind: "" };
   } catch (error) {
+    const kind = /** @type {{ kind?: unknown }} */ (error).kind;
     return {
       status: "failed",
       error: error instanceof Error ? error.message : "Sending failed.",
+      kind: kind === "timeout" || kind === "not_attempted" ? kind : "failed",
     };
   }
 }

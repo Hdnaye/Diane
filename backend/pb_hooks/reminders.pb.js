@@ -8,14 +8,16 @@
 // mechanics as the invitations: channels claimed `sending` in a
 // transaction (reminder_sms_status / reminder_email_status), then sent and
 // recorded; until the deadline, each run sends again the reminders failed
-// or left `sending` by an interrupted run (gateway phone off, restart).
+// or left `sending` by an interrupted run (gateway phone off, restart), at
+// most 3 attempts per channel, and never one that timed out (`unknown`: the
+// slow phone may have sent it) (noticeChannelsToSend, noticeRecord).
 // Logs carry ids only.
 
 cronAdd("dianeReminders", "*/10 * * * *", () => {
   const lib = /** @type {typeof import("./lib/invitations.cjs")} */ (
     require(`${__hooks}/lib/invitations.cjs`)
   );
-  const { reminderDue, reminderMessages } =
+  const { reminderDue, reminderMessages, noticeChannelsToSend, sendingOrder } =
     /** @type {typeof import("./lib/notifications.cjs")} */ (
       require(`${__hooks}/lib/notifications.cjs`)
     );
@@ -46,7 +48,7 @@ cronAdd("dianeReminders", "*/10 * * * *", () => {
 
   for (const found of hunts) {
     if (!found) continue;
-    /** @type {import("./shared/messaging.cjs").ClaimedItem[]} */
+    /** @type {(import("./shared/messaging.cjs").ClaimedItem & { attempts: number })[]} */
     const toSend = [];
     app.runInTransaction((txApp) => {
       const hunt = txApp.findRecordById("hunts", found.id);
@@ -80,10 +82,14 @@ cronAdd("dianeReminders", "*/10 * * * *", () => {
       );
       for (const invitation of pending) {
         if (!invitation) continue;
-        const channels = lib.channelsToResend(
+        const smsAttempts = invitation.getInt("reminder_sms_attempts");
+        const emailAttempts = invitation.getInt("reminder_email_attempts");
+        const channels = noticeChannelsToSend(
           {
             sms_status: invitation.getString("reminder_sms_status"),
             email_status: invitation.getString("reminder_email_status"),
+            sms_attempts: smsAttempts,
+            email_attempts: emailAttempts,
             updated: invitation.getString("updated"),
           },
           context,
@@ -96,6 +102,7 @@ cronAdd("dianeReminders", "*/10 * * * *", () => {
           id: invitation.id,
           ...channels,
           claimed: invitation.getString("updated"),
+          attempts: smsAttempts + emailAttempts,
         });
       }
     });
@@ -103,7 +110,9 @@ cronAdd("dianeReminders", "*/10 * * * *", () => {
 
     const fields = huntFields(app.findRecordById("hunts", found.id));
     transports = transports ?? appTransports(app);
-    const results = toSend.map((item) =>
+    // Least attempted first, random otherwise: a slow gateway (the rest of
+    // a run is cut off after a timeout) never keeps hitting the same member.
+    const results = sendingOrder(toSend).map((item) =>
       sendClaimed(
         app,
         /** @type {NonNullable<typeof transports>} */ (transports),
@@ -112,6 +121,10 @@ cronAdd("dianeReminders", "*/10 * * * *", () => {
           fields: {
             sms: "reminder_sms_status",
             email: "reminder_email_status",
+          },
+          attempts: {
+            sms: "reminder_sms_attempts",
+            email: "reminder_email_attempts",
           },
           compose: (invitation) =>
             reminderMessages(

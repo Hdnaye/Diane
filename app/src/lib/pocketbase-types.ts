@@ -160,6 +160,7 @@ export const InvitationsReminderSmsStatusOptions = {
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',
+  unknown: 'unknown',
 } as const;
 export type InvitationsReminderSmsStatusOptions =
   (typeof InvitationsReminderSmsStatusOptions)[keyof typeof InvitationsReminderSmsStatusOptions];
@@ -169,6 +170,7 @@ export const InvitationsReminderEmailStatusOptions = {
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',
+  unknown: 'unknown',
 } as const;
 export type InvitationsReminderEmailStatusOptions =
   (typeof InvitationsReminderEmailStatusOptions)[keyof typeof InvitationsReminderEmailStatusOptions];
@@ -178,6 +180,7 @@ export const InvitationsCancellationSmsStatusOptions = {
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',
+  unknown: 'unknown',
 } as const;
 export type InvitationsCancellationSmsStatusOptions =
   (typeof InvitationsCancellationSmsStatusOptions)[keyof typeof InvitationsCancellationSmsStatusOptions];
@@ -187,13 +190,16 @@ export const InvitationsCancellationEmailStatusOptions = {
   sent: 'sent',
   failed: 'failed',
   skipped: 'skipped',
+  unknown: 'unknown',
 } as const;
 export type InvitationsCancellationEmailStatusOptions =
   (typeof InvitationsCancellationEmailStatusOptions)[keyof typeof InvitationsCancellationEmailStatusOptions];
 export type InvitationsRecord = {
   answered_at?: IsoDateString;
   answered_via?: InvitationsAnsweredViaOptions;
+  cancellation_email_attempts?: number;
   cancellation_email_status?: InvitationsCancellationEmailStatusOptions;
+  cancellation_sms_attempts?: number;
   cancellation_sms_status?: InvitationsCancellationSmsStatusOptions;
   created: IsoAutoDateString;
   email_status?: InvitationsEmailStatusOptions;
@@ -201,7 +207,9 @@ export type InvitationsRecord = {
   id: string;
   member: RecordIdString;
   participation: InvitationsParticipationOptions;
+  reminder_email_attempts?: number;
   reminder_email_status?: InvitationsReminderEmailStatusOptions;
+  reminder_sms_attempts?: number;
   reminder_sms_status?: InvitationsReminderSmsStatusOptions;
   sms_status?: InvitationsSmsStatusOptions;
   token: string;
@@ -275,6 +283,7 @@ export const SmsReviewQueueReasonOptions = {
   ambiguous_day: 'ambiguous_day',
   deadline_passed: 'deadline_passed',
   hunt_closed: 'hunt_closed',
+  ambiguous: 'ambiguous',
 } as const;
 export type SmsReviewQueueReasonOptions =
   (typeof SmsReviewQueueReasonOptions)[keyof typeof SmsReviewQueueReasonOptions];
