@@ -6,7 +6,7 @@
   "type": "module",
   "packageManager": "npm@10.9.9",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.22.2"
   },
   "scripts": {
     "setup": "node scripts/setup-pocketbase.js",
