@@ -53,6 +53,30 @@ async function startFakeGateway() {
   };
 }
 
+/** TCP server accepting connections and never answering (phone asleep). */
+async function startSilentGateway() {
+  const sockets = new Set<import("node:net").Socket>();
+  let connections = 0;
+  const server = createTcpServer((socket) => {
+    connections++;
+    sockets.add(socket);
+    socket.on("close", () => sockets.delete(socket));
+  });
+  const port = await freePort();
+  await new Promise<void>((resolve) =>
+    server.listen(port, "127.0.0.1", resolve),
+  );
+  return {
+    url: `http://127.0.0.1:${port}`,
+    connections: () => connections,
+    stop: () =>
+      new Promise<void>((resolve) => {
+        for (const socket of sockets) socket.destroy();
+        server.close(() => resolve());
+      }),
+  };
+}
+
 interface Mail {
   from: string;
   to: string[];
@@ -302,6 +326,29 @@ describe("invitations through the SMS gateway and SMTP", () => {
     }
   });
 
+  it("keeps sending the next SMS after an HTTP error answer", async () => {
+    const members = [await f.newMember(), await f.newMember()];
+    for (const member of members) {
+      sensitive.push(member.phone as string, member.email as string);
+    }
+    const hunt = await f.newHunt();
+    const before = gateway.requests.length;
+    gateway.answerWith(503);
+
+    try {
+      const response = await f.send(hunt.id);
+
+      expect(response.body.sms).toStrictEqual({
+        sent: 0,
+        failed: 2,
+        skipped: 0,
+      });
+      expect(gateway.requests.length - before).toBe(2);
+    } finally {
+      gateway.answerWith(202);
+    }
+  });
+
   it("prints no phone number, e-mail address or gateway secret", () => {
     expect(sensitive.length).toBeGreaterThan(1);
     expectNoPersonalData(pb.process.output(), sensitive);
@@ -356,6 +403,53 @@ describe("invitations without SMS gateway nor SMTP", () => {
     expect(sensitive.length).toBeGreaterThan(1);
     expectNoPersonalData(pb.process.output(), sensitive);
   });
+});
+
+describe("invitations through a gateway that does not answer", () => {
+  let pb: TestInstance;
+  let gateway: Awaited<ReturnType<typeof startSilentGateway>>;
+  const f = fixtures(() => pb);
+
+  beforeAll(async () => {
+    gateway = await startSilentGateway();
+    pb = await startTestInstance({
+      env: {
+        DIANE_SMS_TRANSPORT: "",
+        DIANE_SMS_GATEWAY_URL: gateway.url,
+        DIANE_SMS_GATEWAY_USERNAME: "sms",
+        DIANE_SMS_GATEWAY_PASSWORD: randomBytes(16).toString("hex"),
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await pb?.stop();
+    await gateway?.stop();
+  });
+
+  it(
+    "gives up after one timeout instead of waiting for every SMS",
+    { timeout: 30_000 },
+    async () => {
+      for (let i = 0; i < 4; i++) await f.newMember();
+      const hunt = await f.newHunt();
+      const start = Date.now();
+
+      const response = await f.send(hunt.id);
+
+      const elapsed = Date.now() - start;
+      expect(response.status).toBe(200);
+      expect(response.body).toStrictEqual({
+        invited: 4,
+        sms: { sent: 0, failed: 4, skipped: 0 },
+        email: { sent: 4, failed: 0, skipped: 0 },
+      });
+      expect(gateway.connections()).toBe(1);
+      // One 5 s timeout, not 4 x 15 s.
+      expect(elapsed).toBeGreaterThanOrEqual(4_500);
+      expect(elapsed).toBeLessThan(9_000);
+    },
+  );
 });
 
 describe("invitations without public URL", () => {
