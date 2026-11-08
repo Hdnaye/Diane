@@ -93,11 +93,11 @@ describe("participationAfterAnswer", () => {
 });
 
 describe("attendance", () => {
-  const invitation = (
-    id: string,
-    participation: string,
-    answered_at = "",
-  ) => ({ id, participation, answered_at });
+  const invitation = (id: string, participation: string, answered_at = "") => ({
+    id,
+    participation,
+    answered_at,
+  });
 
   it("counts participations and orders the waiting list by answer time", () => {
     expect(
@@ -132,10 +132,8 @@ describe("attendance", () => {
 
   it("never reports negative free places", () => {
     expect(
-      attendance(
-        [invitation("a", "present"), invitation("b", "present")],
-        1,
-      ).free_places,
+      attendance([invitation("a", "present"), invitation("b", "present")], 1)
+        .free_places,
     ).toBe(0);
   });
 });
