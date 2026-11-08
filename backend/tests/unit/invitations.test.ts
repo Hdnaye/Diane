@@ -15,6 +15,7 @@ const {
   STALE_SENDING_MS,
   MIN_DEFAULT_DEADLINE_DELAY_MS,
   toPocketBaseDate,
+  planAnswer,
 } =
   require("../../pb_hooks/lib/invitations.cjs") as typeof import("../../pb_hooks/lib/invitations.cjs");
 
@@ -432,5 +433,59 @@ describe("sendSummary", () => {
       sms: { sent: 2, failed: 1, skipped: 0 },
       email: { sent: 2, failed: 0, skipped: 1 },
     });
+  });
+});
+
+describe("planAnswer", () => {
+  const base = {
+    hunt: { ...hunt(), max_participants: 2 },
+    current: "pending",
+    others: ["present", "absent", "pending"],
+  };
+
+  it("takes a free place on a yes", () => {
+    expect(planAnswer({ ...base, answer: "yes" }, NOW)).toStrictEqual({
+      ok: true,
+      participation: "present",
+      changed: true,
+    });
+  });
+
+  it("joins the waiting list when full", () => {
+    expect(
+      planAnswer(
+        { ...base, others: ["present", "present"], answer: "yes" },
+        NOW,
+      ),
+    ).toStrictEqual({ ok: true, participation: "waiting_list", changed: true });
+  });
+
+  it("keeps a repeated answer unchanged", () => {
+    expect(
+      planAnswer({ ...base, current: "waiting_list", answer: "yes" }, NOW),
+    ).toStrictEqual({
+      ok: true,
+      participation: "waiting_list",
+      changed: false,
+    });
+  });
+
+  it("refuses after the deadline or for a cancelled hunt", () => {
+    expect(
+      planAnswer(
+        {
+          ...base,
+          hunt: { ...base.hunt, response_deadline: "2026-11-08 09:00:00.000Z" },
+          answer: "no",
+        },
+        NOW,
+      ),
+    ).toMatchObject({ ok: false, refusal: { code: "deadline_passed" } });
+    expect(
+      planAnswer(
+        { ...base, hunt: { ...base.hunt, status: "cancelled" }, answer: "no" },
+        NOW,
+      ),
+    ).toMatchObject({ ok: false, refusal: { code: "hunt_cancelled" } });
   });
 });
