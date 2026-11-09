@@ -269,22 +269,33 @@ describe('PocketBase hunt follow-up', () => {
     }
   });
 
-  it.each([
-    [{ free_places: 2 }, 'yes', 'present'],
-    [{ free_places: null }, 'yes', 'present'],
-    [{ free_places: 0 }, 'yes', 'waiting_list'],
-    [{ free_places: 0 }, 'no', 'absent'],
-  ])(
-    'applies an SMS answer with the free places (%j, %s → %s)',
-    async (places, answer, participation) => {
-      const { requests, followUp } = setUp((request) =>
-        request.method === 'GET'
-          ? {
-              status: 200,
-              body: { present: 4, waiting_list: [], absent: 0, pending: 0, ...places },
-            }
-          : { status: 200, body: invitationRecord({ id: 'inv1' }) }
-      );
+  describe('applying an SMS answer, with the rule of the server', () => {
+    /** A server with this invitation and this attendance of its hunt. */
+    function applying(current: string, attendance: Record<string, unknown>) {
+      return setUp((request) => {
+        if (request.path.includes('/attendance')) {
+          return {
+            status: 200,
+            body: { present: 4, waiting_list: [], absent: 0, pending: 0, ...attendance },
+          };
+        }
+        return {
+          status: 200,
+          body: invitationRecord({ id: 'inv1', participation: current }),
+        };
+      });
+    }
+
+    it.each([
+      ['pending', { free_places: 2 }, 'yes', 'present'],
+      ['absent', { free_places: 2 }, 'yes', 'present'],
+      ['pending', { free_places: null }, 'yes', 'present'],
+      ['pending', { free_places: 0 }, 'yes', 'waiting_list'],
+      ['pending', { free_places: 1, waiting_list: ['inv9'] }, 'yes', 'waiting_list'],
+      ['present', { free_places: 0 }, 'no', 'absent'],
+      ['waiting_list', { free_places: 0 }, 'no', 'absent'],
+    ])('%s, %j, %s → %s', async (current, attendance, answer, participation) => {
+      const { requests, followUp } = applying(current, attendance);
 
       await followUp.applyAnswer({ id: 'inv1', huntId: 'hunt1' }, answer as 'yes' | 'no');
 
@@ -293,8 +304,24 @@ describe('PocketBase hunt follow-up', () => {
         path: '/api/collections/invitations/records/inv1',
         body: { participation, answered_via: 'sms' },
       });
-    }
-  );
+    });
+
+    it.each([
+      ['present', { free_places: 0 }, 'yes'],
+      ['waiting_list', { free_places: 0, waiting_list: ['inv1'] }, 'yes'],
+      ['waiting_list', { free_places: 1, waiting_list: ['inv1'] }, 'yes'],
+      ['absent', { free_places: 1 }, 'no'],
+    ])(
+      'writes nothing when the answer changes nothing: %s, %j, %s',
+      async (current, attendance, answer) => {
+        const { requests, followUp } = applying(current, attendance);
+
+        await followUp.applyAnswer({ id: 'inv1', huntId: 'hunt1' }, answer as 'yes' | 'no');
+
+        expect(requests.filter((request) => request.method === 'PATCH')).toEqual([]);
+      }
+    );
+  });
 
   it('lists the unresolved SMS to check, newest first', async () => {
     const { requests, followUp } = setUp(() => ({

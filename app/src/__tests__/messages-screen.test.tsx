@@ -119,6 +119,66 @@ describe('MessagesScreen', () => {
     expect(invitation).toMatchObject({ participation: 'present', answered_via: 'sms' });
   });
 
+  describe('applying OUI, with the rule of the server', () => {
+    /** A hunt with one free place, Paul already waiting, and Jeanne's message to apply. */
+    const waitingHunt = (participation: 'pending' | 'present' | 'waiting_list') =>
+      createInMemoryHuntFollowUp({
+        hunts: [{ ...hunt('hunt1', '2026-11-14'), max_participants: 1 }],
+        members: [JEANNE, PAUL],
+        invitations: [
+          {
+            id: 'i1',
+            huntId: 'hunt1',
+            member: JEANNE,
+            participation,
+            answered_via: 'web',
+            answered_at: '2026-11-07T10:00:00.000Z',
+          },
+          {
+            id: 'i2',
+            huntId: 'hunt1',
+            member: PAUL,
+            participation: 'waiting_list',
+            answered_via: 'web',
+            answered_at: '2026-11-07T11:00:00.000Z',
+          },
+        ],
+        reviewItems: [FROM_JEANNE],
+      });
+
+    async function applyYes(followUp: ReturnType<typeof createInMemoryHuntFollowUp>) {
+      const user = userEvent.setup();
+      await openMessages(followUp);
+      await user.press(
+        await screen.findByRole('button', { name: 'Appliquer OUI : Jeanne Fictive' })
+      );
+      await screen.findByText('Réponse OUI appliquée à la battue du samedi 14 novembre.');
+      return (await followUp.listInvitations('hunt1'))[0];
+    }
+
+    it('does not pass the members already on the waiting list', async () => {
+      expect(await applyYes(waitingHunt('pending'))).toMatchObject({
+        participation: 'waiting_list',
+        answered_via: 'sms',
+      });
+    });
+
+    it('keeps a member already present, even on a full hunt', async () => {
+      expect(await applyYes(waitingHunt('present'))).toMatchObject({
+        participation: 'present',
+        answered_via: 'web',
+      });
+    });
+
+    it('keeps the rank of a member already on the waiting list', async () => {
+      expect(await applyYes(waitingHunt('waiting_list'))).toMatchObject({
+        participation: 'waiting_list',
+        answered_via: 'web',
+        answered_at: '2026-11-07T10:00:00.000Z',
+      });
+    });
+  });
+
   it('asks which hunt when the member has several open invitations', async () => {
     const user = userEvent.setup();
     const followUp = createInMemoryHuntFollowUp({
