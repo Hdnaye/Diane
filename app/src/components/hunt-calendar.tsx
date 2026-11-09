@@ -12,8 +12,12 @@ import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
 import { remToPx } from '@/theme/units';
 
 export type HuntCalendarProps = {
-  /** Days that already have a hunt (`yyyy-MM-dd`): marked and not selectable. */
+  /**
+   * Days that already have a hunt (`yyyy-MM-dd`): marked, and not selectable. With
+   * `onSelectHunt`, pressing one calls it instead.
+   */
   huntDates: string[];
+  onSelectHunt?: (date: string) => void;
   selectedDate?: string;
   onSelectDate: (date: string) => void;
   /** Days before this one (`yyyy-MM-dd`) cannot be chosen. */
@@ -48,9 +52,11 @@ export function HuntCalendar({
   huntDates,
   selectedDate,
   onSelectDate,
+  onSelectHunt,
   minDate,
 }: HuntCalendarProps) {
   const markedDates: Record<string, { marked?: boolean; selected?: boolean }> = {};
+  const huntDays = new Set(huntDates);
   for (const date of huntDates) {
     markedDates[date] = { marked: true };
   }
@@ -66,8 +72,10 @@ export function HuntCalendar({
       minDate={minDate}
       hideExtraDays
       markedDates={markedDates}
-      onDayPress={(day: DateData) => onSelectDate(day.dateString)}
-      dayComponent={DayCell}
+      onDayPress={(day: DateData) =>
+        huntDays.has(day.dateString) ? onSelectHunt?.(day.dateString) : onSelectDate(day.dateString)
+      }
+      dayComponent={onSelectHunt ? OpenableHuntDayCell : DayCell}
       renderArrow={(direction: 'left' | 'right') => (
         <View className="h-touch-min w-touch-min items-center justify-center">
           <Icon as={direction === 'left' ? ChevronLeft : ChevronRight} className="text-primary" />
@@ -80,14 +88,25 @@ export function HuntCalendar({
 
 type DayCellProps = React.ComponentProps<NonNullable<CalendarProps['dayComponent']>>;
 
-function DayCell({ date, state, marking, onPress }: DayCellProps) {
+/** A day cell whose hunt days can be pressed (to open the hunt). */
+function OpenableHuntDayCell(props: DayCellProps) {
+  return <DayCell {...props} huntOpenable />;
+}
+
+function DayCell({
+  date,
+  state,
+  marking,
+  onPress,
+  huntOpenable = false,
+}: DayCellProps & { huntOpenable?: boolean }) {
   if (!date) {
     return <View className="h-touch-min w-touch-min" />;
   }
   const isToday = date.dateString === parisDay(new Date());
   const isHunt = Boolean(marking?.marked);
   const isSelected = Boolean(marking?.selected) && !isHunt;
-  const isDisabled = isHunt || state === 'disabled';
+  const isDisabled = isHunt ? !huntOpenable : state === 'disabled';
 
   const label = [
     `${formatLongDay(date.dateString)} ${date.year}`,

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HuntCalendar } from '@/components/hunt-calendar';
 import { HuntCard } from '@/components/hunt-card';
+import { ReviewLink } from '@/components/review-link';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useHunts, useServerConnection } from '@/data/hunt-queries';
@@ -53,6 +54,10 @@ export default function HomeScreen() {
           selectedDate={selectedDate}
           minDate={today}
           onSelectDate={setSelectedDate}
+          onSelectHunt={(date) => {
+            const hunt = hunts.find((candidate) => candidate.date === date);
+            if (hunt) router.push(`/hunts/${hunt.id}`);
+          }}
         />
       </View>
       <Button
@@ -66,6 +71,7 @@ export default function HomeScreen() {
       <Button variant="secondary" className="w-full" onPress={() => router.push('/members')}>
         <Text>Adhérents</Text>
       </Button>
+      <ReviewLink />
       {!connection.isError && (
         <>
           <Text variant="h2">Prochaines battues</Text>
@@ -85,7 +91,13 @@ export default function HomeScreen() {
           ) : upcoming.length === 0 ? (
             <Text className="text-muted-foreground">Aucune battue prévue.</Text>
           ) : (
-            upcoming.map((hunt) => <HuntCard key={hunt.id} hunt={hunt} />)
+            upcoming.map((hunt) => (
+              <HuntCard
+                key={hunt.id}
+                hunt={hunt}
+                onPress={() => router.push(`/hunts/${hunt.id}`)}
+              />
+            ))
           )}
         </>
       )}
