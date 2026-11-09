@@ -444,11 +444,12 @@ describe('HuntDetailScreen', () => {
       expect(screen.getByLabelText('Absents : 1')).toBeOnTheScreen();
       expect(screen.getByLabelText('Sans réponse : 1')).toBeOnTheScreen();
 
-      const present = group('Présents');
-      expect(present.getAllByText('Présent')).toHaveLength(2);
-      expect(present.getByText('Jeanne Fictive')).toBeOnTheScreen();
-      expect(present.getByText('Par SMS, samedi 7 novembre à 14 h 32')).toBeOnTheScreen();
-      expect(present.getByText('Par le lien, samedi 7 novembre à 16 h 00')).toBeOnTheScreen();
+      expect(group('Présents').getAllByText('Présent')).toHaveLength(2);
+      expect(group('Présents').getByText('Jeanne Fictive')).toBeOnTheScreen();
+      expect(group('Présents').getByText('Par SMS, samedi 7 novembre à 14 h 32')).toBeOnTheScreen();
+      expect(
+        group('Présents').getByText('Par le lien, samedi 7 novembre à 16 h 00')
+      ).toBeOnTheScreen();
       expect(group("Liste d'attente").getByText('Marc Essai')).toBeOnTheScreen();
       expect(group('Absents').getByText('Lucie Démo')).toBeOnTheScreen();
       expect(group('Sans réponse').getByText('Henri Test')).toBeOnTheScreen();

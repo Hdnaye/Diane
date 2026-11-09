@@ -117,7 +117,7 @@ export default function HuntDetailScreen() {
       <View className="flex-1 gap-4 bg-background px-4 py-6">
         <Stack.Screen options={{ title: 'Battue' }} />
         {huntQuery.error instanceof HuntNotFoundError ? (
-          <Text role="alert">Cette battue n'existe pas ou a été supprimée.</Text>
+          <Text role="alert">Cette battue n&apos;existe pas ou a été supprimée.</Text>
         ) : huntQuery.isError ? (
           <>
             <Text role="alert" className="font-sans-bold text-danger">

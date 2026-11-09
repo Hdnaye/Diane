@@ -66,15 +66,17 @@ describe('MessagesScreen', () => {
       'Message de Jeanne Fictive',
       'Message de 06 39 98 56 78',
     ]);
-    const jeanne = message('Jeanne Fictive');
-    expect(jeanne.getByText('dimanche 8 novembre à 8 h 15')).toBeOnTheScreen();
-    expect(jeanne.getByText('« Oui si il fait beau »')).toBeOnTheScreen();
-    expect(jeanne.getByText('Réponse ambiguë ou conditionnelle')).toBeOnTheScreen();
-    const unknown = message('06 39 98 56 78');
-    expect(unknown.getByText('« OUI »')).toBeOnTheScreen();
-    expect(unknown.getByText('Numéro inconnu')).toBeOnTheScreen();
+    expect(message('Jeanne Fictive').getByText('dimanche 8 novembre à 8 h 15')).toBeOnTheScreen();
+    expect(message('Jeanne Fictive').getByText('« Oui si il fait beau »')).toBeOnTheScreen();
+    expect(
+      message('Jeanne Fictive').getByText('Réponse ambiguë ou conditionnelle')
+    ).toBeOnTheScreen();
+    expect(message('06 39 98 56 78').getByText('« OUI »')).toBeOnTheScreen();
+    expect(message('06 39 98 56 78').getByText('Numéro inconnu')).toBeOnTheScreen();
     // An unknown sender has no invitation to apply the answer to.
-    expect(unknown.queryByRole('button', { name: /^Appliquer/ })).not.toBeOnTheScreen();
+    expect(
+      message('06 39 98 56 78').queryByRole('button', { name: /^Appliquer/ })
+    ).not.toBeOnTheScreen();
   });
 
   it('says when there is nothing to check', async () => {
