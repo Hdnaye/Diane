@@ -180,6 +180,7 @@ function ApplyAnswer({
           })}
         </View>
       )}
+      <Text>Réponse à appliquer :</Text>
       <View className="flex-row gap-3">
         {(['yes', 'no'] as const).map((answer) => {
           const word = answer === 'yes' ? 'OUI' : 'NON';
@@ -191,7 +192,7 @@ function ApplyAnswer({
               disabled={!chosen || apply.isPending}
               aria-label={`Appliquer ${word} : ${sender}`}
               onPress={() => applyAnswer(answer)}>
-              <Text>Appliquer {word}</Text>
+              <Text>{word}</Text>
             </Button>
           );
         })}
