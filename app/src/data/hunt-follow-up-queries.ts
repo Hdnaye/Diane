@@ -1,0 +1,148 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsFocused } from 'expo-router';
+
+import type { ManualParticipation } from '@/data/hunt-follow-up';
+import { huntKeys, useServerConnection } from '@/data/hunt-queries';
+import { useHuntFollowUpRepository } from '@/data/hunt-repository-context';
+
+/** The answers of a hunt are refreshed this often while its screen is shown. */
+export const ATTENDANCE_REFRESH_MS = 15_000;
+
+export const followUpKeys = {
+  hunt: (id: string) => [...huntKeys.all, id] as const,
+  invitations: (id: string) => [...huntKeys.all, id, 'invitations'] as const,
+  activeMembers: ['active-members'] as const,
+  review: ['sms-review'] as const,
+  openInvitations: (memberId: string) => ['open-invitations', memberId] as const,
+};
+
+export function useHuntDetail(id: string) {
+  const followUp = useHuntFollowUpRepository();
+  const connection = useServerConnection();
+  return useQuery({
+    queryKey: followUpKeys.hunt(id),
+    queryFn: () => followUp.getHunt(id),
+    enabled: connection.isSuccess,
+  });
+}
+
+/** The invitations of a hunt and their answers, refreshed while the screen is focused. */
+export function useInvitations(huntId: string) {
+  const followUp = useHuntFollowUpRepository();
+  const connection = useServerConnection();
+  const focused = useIsFocused();
+  return useQuery({
+    queryKey: followUpKeys.invitations(huntId),
+    queryFn: () => followUp.listInvitations(huntId),
+    enabled: connection.isSuccess,
+    refetchInterval: focused ? ATTENDANCE_REFRESH_MS : false,
+  });
+}
+
+export function useActiveMemberCount(enabled: boolean) {
+  const followUp = useHuntFollowUpRepository();
+  const connection = useServerConnection();
+  return useQuery({
+    queryKey: followUpKeys.activeMembers,
+    queryFn: () => followUp.countActiveMembers(),
+    enabled: enabled && connection.isSuccess,
+  });
+}
+
+/** After an action on a hunt: its status, its answers and the hunt list may have changed. */
+function useRefreshHunt(huntId: string) {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: followUpKeys.hunt(huntId) });
+}
+
+export function useSendInvitations(huntId: string) {
+  const followUp = useHuntFollowUpRepository();
+  const refresh = useRefreshHunt(huntId);
+  return useMutation({
+    mutationFn: () => followUp.sendInvitations(huntId),
+    onSettled: refresh,
+  });
+}
+
+export function useResendFailed(huntId: string) {
+  const followUp = useHuntFollowUpRepository();
+  const refresh = useRefreshHunt(huntId);
+  return useMutation({
+    mutationFn: () => followUp.resendFailed(huntId),
+    onSettled: refresh,
+  });
+}
+
+export function useCancelHunt(huntId: string) {
+  const followUp = useHuntFollowUpRepository();
+  const refresh = useRefreshHunt(huntId);
+  return useMutation({
+    mutationFn: () => followUp.cancelHunt(huntId),
+    onSettled: refresh,
+  });
+}
+
+export function useSetParticipation(huntId: string) {
+  const followUp = useHuntFollowUpRepository();
+  const refresh = useRefreshHunt(huntId);
+  return useMutation({
+    mutationFn: ({ id, participation }: { id: string; participation: ManualParticipation }) =>
+      followUp.setParticipation(id, participation),
+    onSettled: refresh,
+  });
+}
+
+/** Unresolved SMS to check. */
+export function useReviewItems() {
+  const followUp = useHuntFollowUpRepository();
+  const connection = useServerConnection();
+  return useQuery({
+    queryKey: followUpKeys.review,
+    queryFn: () => followUp.listReviewItems(),
+    enabled: connection.isSuccess,
+  });
+}
+
+export function useOpenInvitations(memberId: string | null, today: string) {
+  const followUp = useHuntFollowUpRepository();
+  const connection = useServerConnection();
+  return useQuery({
+    queryKey: followUpKeys.openInvitations(memberId ?? ''),
+    queryFn: () => followUp.listOpenInvitations(memberId ?? '', today),
+    enabled: memberId !== null && connection.isSuccess,
+  });
+}
+
+export function useResolveReviewItem() {
+  const followUp = useHuntFollowUpRepository();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => followUp.resolveReviewItem(id),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: followUpKeys.review }),
+  });
+}
+
+/** Applies the answer of an SMS to check to one of the member's invitations, then resolves it. */
+export function useApplyReviewAnswer() {
+  const followUp = useHuntFollowUpRepository();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      invitation,
+      answer,
+    }: {
+      itemId: string;
+      invitation: { id: string; huntId: string };
+      answer: 'yes' | 'no';
+    }) => {
+      await followUp.applyAnswer(invitation, answer);
+      await followUp.resolveReviewItem(itemId);
+    },
+    onSettled: (_data, _error, { invitation }) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: followUpKeys.review }),
+        queryClient.invalidateQueries({ queryKey: followUpKeys.hunt(invitation.huntId) }),
+      ]),
+  });
+}

@@ -39,7 +39,10 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <HuntRepositoryProvider repository={appBackend.repository} connection={appBackend.connection}>
+      <HuntRepositoryProvider
+        repository={appBackend.repository}
+        connection={appBackend.connection}
+        followUp={appBackend.followUp}>
         <ThemeProvider value={NAV_THEME}>
           <StatusBar style="dark" />
           <Stack>
