@@ -8,6 +8,9 @@ import { useHuntFollowUpRepository } from '@/data/hunt-repository-context';
 /** A hunt and its answers are refreshed this often while its screen is shown. */
 export const ATTENDANCE_REFRESH_MS = 15_000;
 
+/** The SMS to check are refreshed this often while a screen showing them is focused. */
+export const REVIEW_REFRESH_MS = 30_000;
+
 export const followUpKeys = {
   hunt: (id: string) => [...huntKeys.all, id] as const,
   invitations: (id: string) => [...huntKeys.all, id, 'invitations'] as const,
@@ -108,14 +111,16 @@ export function useSetParticipation(huntId: string) {
   });
 }
 
-/** Unresolved SMS to check. */
+/** Unresolved SMS to check: new ones arrive at any time, and the home screen stays mounted. */
 export function useReviewItems() {
   const followUp = useHuntFollowUpRepository();
   const connection = useServerConnection();
+  const focused = useIsFocused();
   return useQuery({
     queryKey: followUpKeys.review,
     queryFn: () => followUp.listReviewItems(),
     enabled: connection.isSuccess,
+    refetchInterval: focused ? REVIEW_REFRESH_MS : false,
   });
 }
 
