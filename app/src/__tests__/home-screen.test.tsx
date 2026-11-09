@@ -4,6 +4,7 @@ import { Text } from 'react-native';
 
 import HomeScreen from '@/app/index';
 import NewHuntScreen from '@/app/hunts/new';
+import { createInMemoryHuntFollowUp } from '@/data/hunt-follow-up';
 import type { HuntRepository } from '@/data/hunt-repository';
 import { ServerConfigMissingError, type ServerConnection } from '@/data/server-connection';
 import type { Hunt } from '@/data/types';
@@ -21,6 +22,14 @@ const HUNTS = [
 
 function NewHuntStub() {
   return <Text>Formulaire de création</Text>;
+}
+
+function HuntStub() {
+  return <Text>Fiche de la battue</Text>;
+}
+
+function MessagesStub() {
+  return <Text>Liste des messages</Text>;
 }
 
 describe('HomeScreen', () => {
@@ -93,12 +102,58 @@ describe('HomeScreen', () => {
     ).not.toBeOnTheScreen();
   });
 
-  it('marks the hunt days in the calendar', async () => {
+  it('marks the hunt days in the calendar, and opens a hunt from its day', async () => {
+    const user = userEvent.setup();
+    await renderScreens({ index: HomeScreen, 'hunts/[id]': HuntStub }, { hunts: HUNTS });
+
+    await user.press(
+      await screen.findByRole('button', { name: 'samedi 14 novembre 2026, battue prévue' })
+    );
+
+    expect(await screen.findByText('Fiche de la battue')).toBeOnTheScreen();
+    expect(screen).toHavePathname('/hunts/hunt-2026-11-14');
+  });
+
+  it('opens a hunt from its card', async () => {
+    const user = userEvent.setup();
+    await renderScreens({ index: HomeScreen, 'hunts/[id]': HuntStub }, { hunts: HUNTS });
+
+    await user.press(
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 21 novembre' })
+    );
+
+    expect(await screen.findByText('Fiche de la battue')).toBeOnTheScreen();
+    expect(screen).toHavePathname('/hunts/hunt-2026-11-21');
+  });
+
+  it('leads to the SMS to check, with their number, only when there are some', async () => {
+    const user = userEvent.setup();
+    const reviewItem = (id: string) => ({
+      id,
+      from_phone: '+33639981234',
+      body: 'OUI peut-être',
+      received_at: '2026-11-07T07:00:00.000Z',
+      reason: 'ambiguous' as const,
+      member: null,
+    });
+    await renderScreens(
+      { index: HomeScreen, messages: MessagesStub },
+      {
+        followUp: createInMemoryHuntFollowUp({ reviewItems: [reviewItem('s1'), reviewItem('s2')] }),
+      }
+    );
+
+    await user.press(await screen.findByRole('button', { name: 'Messages à vérifier (2)' }));
+
+    expect(await screen.findByText('Liste des messages')).toBeOnTheScreen();
+    expect(screen).toHavePathname('/messages');
+  });
+
+  it('shows no link to the SMS to check when there is none', async () => {
     await renderScreens({ index: HomeScreen }, { hunts: HUNTS });
 
-    expect(
-      await screen.findByRole('button', { name: 'samedi 14 novembre 2026, battue prévue' })
-    ).toBeDisabled();
+    expect(await screen.findByRole('heading', { name: 'samedi 14 novembre' })).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Messages à vérifier/ })).not.toBeOnTheScreen();
   });
 
   it('opens the creation form', async () => {
