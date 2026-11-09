@@ -5,6 +5,7 @@ import {
   FeatureUnavailableError,
   HuntActionError,
   HuntNotFoundError,
+  participationAfterAnswer,
   type CancelSummary,
   type HuntFollowUpRepository,
   type InvitationEntry,
@@ -29,7 +30,7 @@ type InvitationWithHunt = InvitationsResponse<{ hunt?: Pick<HuntsResponse, 'id' 
 type ReviewRecord = SmsReviewQueueResponse<{ member?: MemberName }>;
 
 /** Attendance of a hunt (`GET /api/diane/hunts/{id}/attendance`): only what the app reads. */
-type Attendance = { free_places: number | null };
+type Attendance = { free_places: number | null; waiting_list: string[] };
 
 const status = (error: unknown) => (error instanceof ClientResponseError ? error.status : 0);
 
@@ -122,13 +123,21 @@ export function createPocketBaseHuntFollowUp(
     },
     setParticipation: (id, participation) => updateInvitation(id, participation, 'manual'),
     async applyAnswer({ id, huntId }, answer) {
-      if (answer === 'no') {
-        return updateInvitation(id, 'absent', 'sms');
+      const [{ participation: current }, attendance] = await Promise.all([
+        session.run(() => invitations().getOne<InvitationsResponse>(id), { isDoubtful: notFound }),
+        session.run(() =>
+          pb.send<Attendance>(`/api/diane/hunts/${encodeURIComponent(huntId)}/attendance`, {})
+        ),
+      ]);
+      const participation = participationAfterAnswer({
+        current,
+        answer,
+        freePlaces: attendance.free_places,
+        waitingCount: attendance.waiting_list.length,
+      });
+      if (participation !== current) {
+        await updateInvitation(id, participation, 'sms');
       }
-      const attendance = await session.run(() =>
-        pb.send<Attendance>(`/api/diane/hunts/${encodeURIComponent(huntId)}/attendance`, {})
-      );
-      return updateInvitation(id, attendance.free_places === 0 ? 'waiting_list' : 'present', 'sms');
     },
     async listReviewItems() {
       const records = await session.run(

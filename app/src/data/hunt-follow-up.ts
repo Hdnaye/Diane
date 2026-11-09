@@ -49,6 +49,27 @@ export function isResendable(
   return status === 'failed' || status === 'not_sent' || isAbandonedSending(status, entry, now);
 }
 
+/**
+ * Participation after a member's answer, as on the server (`participationAfterAnswer`): a repeated
+ * yes keeps the current place, and a freed place is not given ahead of the members waiting.
+ */
+export function participationAfterAnswer({
+  current,
+  answer,
+  freePlaces,
+  waitingCount,
+}: {
+  current: Participation;
+  answer: 'yes' | 'no';
+  /** `null`: no limit. */
+  freePlaces: number | null;
+  waitingCount: number;
+}): Participation {
+  if (answer === 'no') return 'absent';
+  if (current === 'present' || current === 'waiting_list') return current;
+  return freePlaces !== 0 && waitingCount === 0 ? 'present' : 'waiting_list';
+}
+
 /** Per channel; `not_sent`: not attempted (gateway unreachable), resent by `resend-failed`. */
 export type ChannelSummary = { sent: number; failed: number; skipped: number; not_sent?: number };
 
@@ -92,8 +113,9 @@ export interface HuntFollowUpRepository {
   /** An answer entered by the organizer (`answered_via: manual`). */
   setParticipation(invitationId: string, participation: ManualParticipation): Promise<void>;
   /**
-   * An SMS answer applied by the organizer (`answered_via: sms`): a yes is on the waiting list
-   * when the hunt is full, as when the member answers by himself.
+   * An SMS answer applied by the organizer (`answered_via: sms`), with the same result as when the
+   * member answers by himself (`participationAfterAnswer`). An answer that changes nothing is not
+   * recorded: its time is the rank on the waiting list.
    */
   applyAnswer(invitation: { id: string; huntId: string }, answer: 'yes' | 'no'): Promise<void>;
   /** Unresolved SMS to check, newest first. */
@@ -273,15 +295,18 @@ export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
       record(invitationId, participation, 'manual');
     },
     async applyAnswer({ id, huntId }, answer) {
-      if (answer === 'no') {
-        record(id, 'absent', 'sms');
-        return;
-      }
       const { max_participants: max } = hunt(huntId);
-      const present = invitations.filter(
-        (item) => item.huntId === huntId && item.participation === 'present'
-      ).length;
-      record(id, max !== null && present >= max ? 'waiting_list' : 'present', 'sms');
+      const count = (participation: Participation) =>
+        invitations.filter((item) => item.huntId === huntId && item.participation === participation)
+          .length;
+      const { participation: current } = invitation(id);
+      const participation = participationAfterAnswer({
+        current,
+        answer,
+        freePlaces: max === null ? null : Math.max(0, max - count('present')),
+        waitingCount: count('waiting_list'),
+      });
+      if (participation !== current) record(id, participation, 'sms');
     },
     async listReviewItems() {
       return reviewItems
