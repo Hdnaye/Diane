@@ -56,16 +56,31 @@ const byName = (a: InvitationEntry, b: InvitationEntry) =>
 const byAnswerTime = (a: InvitationEntry, b: InvitationEntry) =>
   (a.answered_at ?? '').localeCompare(b.answered_at ?? '');
 
+/** A refusal or an error answer: the action did not go through. Otherwise, no answer came. */
+const serverAnswered = (error: unknown) =>
+  error instanceof HuntActionError || (error instanceof ClientResponseError && error.status > 0);
+
 function sendingError(error: unknown): string {
   if (error instanceof HuntActionError && SENDING_REFUSALS[error.code]) {
     return SENDING_REFUSALS[error.code];
   }
-  if (error instanceof ClientResponseError && error.status > 0) {
+  if (serverAnswered(error)) {
     return "L'envoi n'a pas pu se faire. Réessayez dans un moment.";
   }
-  // No answer: the sending (several minutes with a slow gateway phone) may go on on the server,
-  // which never sends a message twice; the statuses below tell what went out.
-  return "La connexion au serveur a été interrompue. Si l'envoi avait commencé, il continue sur le serveur : l'état des envois se met à jour ci-dessous.";
+  // The sending does not depend on this request: it goes on on the server unless the server itself
+  // stopped, and never sends a message twice. The statuses, refreshed regularly, tell what went out.
+  return "La réponse du serveur n'est pas arrivée. Si l'envoi avait commencé, il peut continuer sur le serveur : l'état de chaque envoi s'affiche ci-dessous dès que le serveur est joignable.";
+}
+
+function cancellationError(error: unknown): string {
+  if (error instanceof FeatureUnavailableError) {
+    return "Fonction pas encore disponible sur le serveur : la battue n'a pas été annulée.";
+  }
+  if (serverAnswered(error)) {
+    return "La battue n'a pas pu être annulée. Réessayez dans un moment.";
+  }
+  // The server marks the hunt as cancelled before telling the members.
+  return "La réponse du serveur n'est pas arrivée. L'annulation a pu être prise en compte : vérifiez le statut de la battue ci-dessus, et réessayez si elle n'est pas annulée.";
 }
 
 export default function HuntDetailScreen() {
@@ -165,14 +180,7 @@ export default function HuntDetailScreen() {
     setNotice(null);
     cancel.mutate(undefined, {
       onSuccess: (summary) => setNotice({ tone: 'success', text: formatCancelSummary(summary) }),
-      onError: (error) =>
-        setNotice({
-          tone: 'error',
-          text:
-            error instanceof FeatureUnavailableError
-              ? "Fonction pas encore disponible sur le serveur : la battue n'a pas été annulée."
-              : "La battue n'a pas pu être annulée. Vérifiez la connexion, puis réessayez.",
-        }),
+      onError: (error) => setNotice({ tone: 'error', text: cancellationError(error) }),
     });
   }
 

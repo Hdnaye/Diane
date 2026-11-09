@@ -452,7 +452,9 @@ describe('HuntDetailScreen', () => {
       await act(() => jest.advanceTimersByTimeAsync(ATTENDANCE_REFRESH_MS));
 
       expect(await screen.findByText('Invitations envoyées')).toBeOnTheScreen();
-      expect(screen.queryByRole('button', { name: 'Envoyer les invitations' })).not.toBeOnTheScreen();
+      expect(
+        screen.queryByRole('button', { name: 'Envoyer les invitations' })
+      ).not.toBeOnTheScreen();
     });
 
     it('refreshes the answers when pulled down', async () => {

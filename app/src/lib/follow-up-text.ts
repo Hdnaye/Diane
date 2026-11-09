@@ -16,11 +16,11 @@ function channelParts(sms: ChannelSummary, email: ChannelSummary): string[] {
   return [
     sms.sent && plural(sms.sent, 'SMS envoyé', 'SMS envoyés'),
     sms.failed && plural(sms.failed, 'SMS non envoyé', 'SMS non envoyés'),
-    sms.not_sent && plural(sms.not_sent, "SMS en attente d'envoi", "SMS en attente d'envoi"),
+    sms.not_sent && plural(sms.not_sent, 'SMS pas encore envoyé', 'SMS pas encore envoyés'),
     email.sent && plural(email.sent, 'e-mail envoyé', 'e-mails envoyés'),
     email.failed && plural(email.failed, 'e-mail non envoyé', 'e-mails non envoyés'),
     email.not_sent &&
-      plural(email.not_sent, "e-mail en attente d'envoi", "e-mails en attente d'envoi"),
+      plural(email.not_sent, 'e-mail pas encore envoyé', 'e-mails pas encore envoyés'),
   ].filter((part): part is string => Boolean(part));
 }
 
@@ -29,21 +29,48 @@ function withParts(head: string, sms: ChannelSummary, email: ChannelSummary): st
   return parts.length ? `${head} : ${parts.join(', ')}.` : `${head}.`;
 }
 
+/** Nothing sends the invitations not attempted (gateway unreachable) but this action. */
+function withResendHint(summary: string, { not_sent: notSent }: ChannelSummary): string {
+  return notSent
+    ? `${summary} Le téléphone d'envoi ne répond pas : vérifiez-le, puis appuyez sur « Renvoyer les échecs ».`
+    : summary;
+}
+
 export function formatSendSummary({ invited, sms, email }: SendSummary): string {
   return invited === 0
     ? 'Aucun nouvel adhérent à inviter.'
-    : withParts(plural(invited, 'adhérent invité', 'adhérents invités'), sms, email);
+    : withResendHint(
+        withParts(plural(invited, 'adhérent invité', 'adhérents invités'), sms, email),
+        sms
+      );
 }
 
 export function formatResendSummary({ invited, sms, email }: SendSummary): string {
   return invited === 0
     ? 'Aucun échec à renvoyer.'
-    : withParts(plural(invited, 'invitation renvoyée', 'invitations renvoyées'), sms, email);
+    : withResendHint(
+        withParts(plural(invited, 'invitation renvoyée', 'invitations renvoyées'), sms, email),
+        sms
+      );
 }
 
+/** The notices not attempted are as lost as the failed ones: the app does not send them again. */
+const notDelivered = ({ failed, not_sent: notSent = 0, ...channel }: ChannelSummary) => ({
+  ...channel,
+  failed: failed + notSent,
+});
+
 export function formatCancelSummary({ notified, sms, email }: CancelSummary): string {
-  return notified === 0
-    ? 'Battue annulée. Aucun adhérent à prévenir.'
+  if (notified === 0) {
+    return 'Battue annulée. Aucun adhérent à prévenir.';
+  }
+  const [smsNotices, emailNotices] = [notDelivered(sms), notDelivered(email)];
+  return smsNotices.failed || emailNotices.failed
+    ? `${withParts(
+        `Battue annulée. ${plural(notified, 'adhérent concerné', 'adhérents concernés')}`,
+        smsNotices,
+        emailNotices
+      )} Prévenez directement ceux qui n'ont rien reçu.`
     : withParts(
         `Battue annulée. ${plural(notified, 'adhérent prévenu', 'adhérents prévenus')}`,
         sms,
@@ -59,6 +86,8 @@ export const SENDING_REFUSALS: Record<string, string> = {
     'La date limite de réponse est dépassée : les invitations ne peuvent plus partir.',
   hunt_cancelled: 'Cette battue est annulée : les invitations ne peuvent pas partir.',
   hunt_closed: 'Cette battue est terminée : les invitations ne peuvent pas partir.',
+  no_default_template:
+    'Aucun modèle de message par défaut : les invitations ne peuvent pas partir.',
   server_not_configured:
     "Le serveur n'est pas configuré pour envoyer les invitations (adresse publique manquante).",
 };

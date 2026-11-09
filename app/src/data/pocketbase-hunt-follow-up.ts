@@ -53,7 +53,8 @@ export function createPocketBaseHuntFollowUp(
       if (status(error) === 503) {
         throw new HuntActionError('server_not_configured');
       }
-      const code = (error as ClientResponseError).response?.data?.hunt?.code;
+      const data = (error as ClientResponseError).response?.data;
+      const code = data?.hunt?.code ?? data?.template?.code;
       if (status(error) === 409 && typeof code === 'string') {
         throw new HuntActionError(code);
       }

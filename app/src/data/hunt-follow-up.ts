@@ -90,9 +90,10 @@ export type HuntActionErrorCode =
   | 'hunt_closed'
   | 'deadline_passed'
   | 'deadline_missing'
+  | 'no_default_template'
   | 'server_not_configured';
 
-/** The server refused to send (reason in `data.hunt.code`, or 503 without public URL). */
+/** The server refused to send (reason in `data.hunt.code` or `data.template.code`, or 503). */
 export class HuntActionError extends Error {
   constructor(readonly code: HuntActionErrorCode | (string & {})) {
     super(`Refused by the server: ${code}`);

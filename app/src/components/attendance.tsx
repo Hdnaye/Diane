@@ -109,10 +109,10 @@ function InvitationRow({
     entry.sms_status === 'failed' && 'SMS non envoyé',
     entry.email_status === 'failed' && 'E-mail non envoyé',
   ].filter((failure): failure is string => Boolean(failure));
-  // Not attempted (gateway unreachable): waiting to be resent, not a failure.
+  // Not attempted (gateway unreachable, to resend) or being sent: not a failure.
   const waiting = [
-    entry.sms_status === 'not_sent' && "SMS en attente d'envoi",
-    entry.email_status === 'not_sent' && "E-mail en attente d'envoi",
+    entry.sms_status === 'not_sent' && 'SMS pas encore envoyé',
+    entry.email_status === 'not_sent' && 'E-mail pas encore envoyé',
     entry.sms_status === 'sending' && "SMS en cours d'envoi",
     entry.email_status === 'sending' && "E-mail en cours d'envoi",
   ].filter((item): item is string => Boolean(item));
