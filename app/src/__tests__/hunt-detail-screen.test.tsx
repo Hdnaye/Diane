@@ -745,7 +745,7 @@ describe('HuntDetailScreen', () => {
       await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
       expect(
         await screen.findByText(
-          "Annuler la battue du samedi 14 novembre ? Les invités qui n'ont pas répondu NON seront prévenus par SMS et e-mail. Cette action est définitive."
+          "Annuler la battue du samedi 14 novembre ? L'envoi d'un avis par SMS et e-mail sera lancé pour les invités qui n'ont pas répondu NON. Cette action est définitive."
         )
       ).toBeOnTheScreen();
       await user.press(screen.getByRole('button', { name: 'Oui, annuler la battue' }));
