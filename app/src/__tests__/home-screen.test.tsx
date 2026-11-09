@@ -1,4 +1,4 @@
-import { act, userEvent } from '@testing-library/react-native';
+import { act, userEvent, waitFor } from '@testing-library/react-native';
 import { router } from 'expo-router';
 import { screen } from 'expo-router/testing-library';
 import { Text } from 'react-native';
@@ -176,6 +176,40 @@ describe('HomeScreen', () => {
     expect(
       await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre, annulée' })
     ).toBeOnTheScreen();
+  });
+
+  it('leaves the list shown when its refresh after an action fails', async () => {
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({
+      hunts: [{ ...aHunt({ id: 'hunt1', date: '2026-11-14' }), status: 'invitations_sent' }],
+    });
+    const repository: HuntRepository = {
+      list: jest
+        .fn<Promise<Hunt[]>, []>()
+        .mockResolvedValueOnce([await followUp.getHunt('hunt1')])
+        .mockRejectedValue(new Error('network down')),
+      create: () => Promise.reject(new Error('not used')),
+    };
+    await renderScreens(
+      { index: HomeScreen, 'hunts/[id]': HuntDetailScreen },
+      { repository, followUp }
+    );
+
+    await user.press(
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre' })
+    );
+    await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
+    await user.press(await screen.findByRole('button', { name: 'Oui, annuler la battue' }));
+    expect(await screen.findByText('Battue annulée. Aucun adhérent à prévenir.')).toBeOnTheScreen();
+    await waitFor(() => expect(repository.list).toHaveBeenCalledTimes(2));
+    await act(() => router.back());
+
+    expect(
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre' })
+    ).toBeOnTheScreen();
+    expect(
+      screen.queryByText('Impossible de charger les battues. Vérifiez la connexion.')
+    ).not.toBeOnTheScreen();
   });
 
   it('leads to the SMS to check, with their number, only when there are some', async () => {

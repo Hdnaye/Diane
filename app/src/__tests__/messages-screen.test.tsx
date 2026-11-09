@@ -1,4 +1,4 @@
-import { userEvent, within } from '@testing-library/react-native';
+import { act, userEvent, within } from '@testing-library/react-native';
 import { screen } from 'expo-router/testing-library';
 
 import MessagesScreen from '@/app/messages';
@@ -7,6 +7,7 @@ import {
   type HuntDetail,
   type ReviewItem,
 } from '@/data/hunt-follow-up';
+import { REVIEW_REFRESH_MS } from '@/data/hunt-follow-up-queries';
 import { freezeDate, unfreezeDate } from '@/test-utils/clock';
 import { renderScreens } from '@/test-utils/router';
 
@@ -97,6 +98,35 @@ describe('MessagesScreen', () => {
     await user.press(screen.getByRole('button', { name: 'Réessayer' }));
 
     expect(await screen.findByLabelText('Message de 06 39 98 56 78')).toBeOnTheScreen();
+  });
+
+  it('leaves the list shown, with the hunt chosen, when a refresh fails', async () => {
+    jest.useFakeTimers({ now: TODAY, advanceTimers: true });
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({
+      hunts: [hunt('hunt1', '2026-11-14'), hunt('hunt2', '2026-11-21')],
+      members: [JEANNE],
+      invitations: [
+        { id: 'i1', huntId: 'hunt1', member: JEANNE },
+        { id: 'i2', huntId: 'hunt2', member: JEANNE },
+      ],
+      reviewItems: [FROM_JEANNE],
+    });
+    await openMessages(followUp);
+    await user.press(await screen.findByRole('radio', { name: 'samedi 21 novembre' }));
+
+    const refresh = jest
+      .spyOn(followUp, 'listReviewItems')
+      .mockRejectedValueOnce(new Error('network down'));
+    await act(() => jest.advanceTimersByTimeAsync(REVIEW_REFRESH_MS));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await act(() => jest.advanceTimersByTimeAsync(100));
+
+    expect(
+      screen.queryByText('Impossible de charger les messages. Vérifiez la connexion.')
+    ).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Message de Jeanne Fictive')).toBeOnTheScreen();
+    expect(screen.getByRole('radio', { name: 'samedi 21 novembre' })).toBeChecked();
   });
 
   it('says when a message cannot be marked as handled, and keeps it', async () => {
