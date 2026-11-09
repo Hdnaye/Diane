@@ -12,6 +12,7 @@ import {
   FeatureUnavailableError,
   HuntActionError,
   HuntNotFoundError,
+  isResendable,
   type InvitationEntry,
   type ManualParticipation,
   type Participation,
@@ -147,11 +148,13 @@ export default function HuntDetailScreen() {
     counts[entry.participation] += 1;
   }
   const full = hunt.max_participants !== null && counts.present >= hunt.max_participants;
+  // Reading it also renders the screen again at each refresh: a sending can become abandoned.
+  const refreshedAt = invitationsQuery.dataUpdatedAt;
   const hasFailures = invitations.some(
     (entry) =>
       entry.participation === 'pending' &&
-      [entry.sms_status, entry.email_status].some(
-        (channel) => channel === 'failed' || channel === 'not_sent'
+      [entry.sms_status, entry.email_status].some((channel) =>
+        isResendable(channel, entry, refreshedAt)
       )
   );
 
@@ -345,6 +348,7 @@ export default function HuntDetailScreen() {
                 .sort(participation === 'waiting_list' ? byAnswerTime : byName)}
               actionsFor={actionsFor}
               disabled={setParticipation.isPending}
+              now={refreshedAt}
             />
           ))}
         </View>

@@ -21,8 +21,33 @@ export type InvitationEntry = Pick<InvitationsResponse, 'id' | 'participation'> 
   Nullable<
     Pick<InvitationsResponse, 'answered_at' | 'answered_via' | 'sms_status' | 'email_status'>
   > & {
+    updated: string;
     member: Pick<MembersResponse, 'id' | 'name'>;
   };
+
+/** A channel `sending` without news for this long is taken over by `resend-failed` (server). */
+const STALE_SENDING_MS = 10 * 60 * 1000;
+
+/**
+ * A channel left `sending` by an interrupted request. The server may also see it earlier (older
+ * than its last start); the app only knows the delay.
+ */
+export function isAbandonedSending(
+  status: InvitationEntry['sms_status'],
+  { updated }: Pick<InvitationEntry, 'updated'>,
+  now: number
+): boolean {
+  return status === 'sending' && now - new Date(updated).getTime() >= STALE_SENDING_MS;
+}
+
+/** A channel that `resend-failed` sends again, for an invitation still pending. */
+export function isResendable(
+  status: InvitationEntry['sms_status'],
+  entry: Pick<InvitationEntry, 'updated'>,
+  now: number
+): boolean {
+  return status === 'failed' || status === 'not_sent' || isAbandonedSending(status, entry, now);
+}
 
 /** Per channel; `not_sent`: not attempted (gateway unreachable), resent by `resend-failed`. */
 export type ChannelSummary = { sent: number; failed: number; skipped: number; not_sent?: number };
@@ -137,6 +162,7 @@ export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
     answered_via: null,
     sms_status: 'sent',
     email_status: 'skipped',
+    updated: new Date().toISOString(),
     ...invitation,
   }));
   const reviewItems = (data.reviewItems ?? []).map((item) => ({ ...item, resolved: false }));
@@ -202,6 +228,7 @@ export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
           answered_via: null,
           sms_status: 'sent',
           email_status: 'sent',
+          updated: new Date().toISOString(),
         });
       }
       target.status = 'invitations_sent';
@@ -216,8 +243,8 @@ export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
       const summary: SendSummary = { invited: 0, sms: emptyChannels(), email: emptyChannels() };
       for (const item of invitations) {
         if (item.huntId !== huntId || item.participation !== 'pending') continue;
-        const smsFailed = item.sms_status === 'failed' || item.sms_status === 'not_sent';
-        const emailFailed = item.email_status === 'failed' || item.email_status === 'not_sent';
+        const smsFailed = isResendable(item.sms_status, item, Date.now());
+        const emailFailed = isResendable(item.email_status, item, Date.now());
         if (smsFailed) {
           item.sms_status = 'sent';
           summary.sms.sent += 1;

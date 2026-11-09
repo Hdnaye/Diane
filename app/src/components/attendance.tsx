@@ -5,7 +5,11 @@ import { StatusBadge, type AnswerStatus } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import type { InvitationEntry, Participation } from '@/data/hunt-follow-up';
+import {
+  isAbandonedSending,
+  type InvitationEntry,
+  type Participation,
+} from '@/data/hunt-follow-up';
 import { ANSWER_CHANNELS } from '@/lib/follow-up-text';
 import { formatParisDateTime } from '@/lib/paris-time';
 
@@ -70,11 +74,14 @@ export function InvitationGroup({
   entries,
   actionsFor,
   disabled,
+  now,
 }: {
   title: string;
   entries: InvitationEntry[];
   actionsFor: (entry: InvitationEntry) => RowAction[];
   disabled: boolean;
+  /** When the entries were loaded, in milliseconds. */
+  now: number;
 }) {
   if (entries.length === 0) {
     return null;
@@ -90,6 +97,7 @@ export function InvitationGroup({
           entry={entry}
           actions={actionsFor(entry)}
           disabled={disabled}
+          now={now}
         />
       ))}
     </View>
@@ -100,21 +108,27 @@ function InvitationRow({
   entry,
   actions,
   disabled,
+  now,
 }: {
   entry: InvitationEntry;
   actions: RowAction[];
   disabled: boolean;
+  now: number;
 }) {
+  const smsAbandoned = isAbandonedSending(entry.sms_status, entry, now);
+  const emailAbandoned = isAbandonedSending(entry.email_status, entry, now);
   const failures = [
     entry.sms_status === 'failed' && 'SMS non envoyé',
     entry.email_status === 'failed' && 'E-mail non envoyé',
+    smsAbandoned && 'SMS à renvoyer',
+    emailAbandoned && 'E-mail à renvoyer',
   ].filter((failure): failure is string => Boolean(failure));
   // Not attempted (gateway unreachable, to resend) or being sent: not a failure.
   const waiting = [
     entry.sms_status === 'not_sent' && 'SMS pas encore envoyé',
     entry.email_status === 'not_sent' && 'E-mail pas encore envoyé',
-    entry.sms_status === 'sending' && "SMS en cours d'envoi",
-    entry.email_status === 'sending' && "E-mail en cours d'envoi",
+    entry.sms_status === 'sending' && !smsAbandoned && "SMS en cours d'envoi",
+    entry.email_status === 'sending' && !emailAbandoned && "E-mail en cours d'envoi",
   ].filter((item): item is string => Boolean(item));
   const name = entry.member.name || 'Adhérent supprimé';
 

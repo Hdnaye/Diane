@@ -176,6 +176,7 @@ function toInvitationEntry(record: InvitationWithMember): InvitationEntry {
     answered_via: record.answered_via || null,
     sms_status: record.sms_status || null,
     email_status: record.email_status || null,
+    updated: toIsoInstant(record.updated),
     member: {
       id: record.member,
       // A member deleted meanwhile has no expand: no name to show.
