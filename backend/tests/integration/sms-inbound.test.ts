@@ -19,10 +19,14 @@ describe("sms_inbound access", () => {
     id = created.body.id;
   });
 
-  it("is hidden from anonymous requests", async () => {
+  it("refuses anonymous requests with an explicit 401", async () => {
     const list = await api(recordsPath("sms_inbound"));
-    expect(list.body.items ?? []).toHaveLength(0);
-    expect((await api(recordsPath("sms_inbound", id))).status).toBe(404);
+    expect(list.status).toBe(401);
+    expect(list.body.items).toBeUndefined();
+    expect((await api(recordsPath("sms_inbound", id))).status).toBe(401);
+    expect(
+      (await api(recordsPath("sms_inbound"), { token: "invalid" })).status,
+    ).toBe(401);
   });
 
   it("is readable by the organizer", async () => {

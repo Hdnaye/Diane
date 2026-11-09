@@ -105,6 +105,7 @@ export async function startTestInstance({
     DIANE_SMS_GATEWAY_PASSWORD: "",
     DIANE_SMS_GATEWAY_PHONE: "",
     DIANE_SMS_WEBHOOK_SECRET: "",
+    DIANE_REMINDER_SCHEDULE: "",
     DIANE_EMAIL_SENDER_ADDRESS: "",
     DIANE_EMAIL_SENDER_NAME: "",
     ...env,

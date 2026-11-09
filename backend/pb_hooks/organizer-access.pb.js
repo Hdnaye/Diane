@@ -21,6 +21,7 @@ routerUse(
         "invitations",
         "message_templates",
         "sms_review_queue",
+        "sms_inbound",
       ];
       const path = e.request?.url?.path ?? "";
       if (!/^\/api\/collections\/[^/]+\/records(\/|$)/.test(path)) {
