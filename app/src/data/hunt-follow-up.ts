@@ -164,7 +164,11 @@ const emptyChannels = (): ChannelSummary => ({ sent: 0, failed: 0, skipped: 0, n
 /**
  * In-memory implementation, used by the tests: as on the server, a sending first marks the hunt as
  * sent and claims the channels of the active members not yet invited, then every channel is sent;
- * cancelling notifies those who did not answer no. Not reproduced: the default deadline.
+ * cancelling notifies those who did not answer no.
+ *
+ * Not reproduced (tests simulate what they need): the refusals `deadline_passed`,
+ * `deadline_missing` and `no_default_template`, the default deadline set by a sending, the `sending`
+ * step of `resendFailed`, and the idempotence of `cancelHunt` (`notified` counted at each call).
  */
 export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
   const hunts = [...(data.hunts ?? [])];
