@@ -9,7 +9,6 @@ import { HuntStatusBadge } from '@/components/hunt-status-badge';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import {
-  FeatureUnavailableError,
   HuntActionError,
   HuntNotFoundError,
   isResendable,
@@ -74,9 +73,6 @@ function sendingError(error: unknown): string {
 }
 
 function cancellationError(error: unknown): string {
-  if (error instanceof FeatureUnavailableError) {
-    return "Fonction pas encore disponible sur le serveur : la battue n'a pas été annulée.";
-  }
   if (serverAnswered(error)) {
     return "La battue n'a pas pu être annulée. Réessayez dans un moment.";
   }

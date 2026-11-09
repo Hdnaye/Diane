@@ -79,15 +79,12 @@ export type SendSummary = { invited: number; sms: ChannelSummary; email: Channel
 /** What `cancel` answers. */
 export type CancelSummary = { notified: number; sms: ChannelSummary; email: ChannelSummary };
 
-/**
- * An SMS reply the server could not apply. `reason` comes with backend PR #12 (generated type
- * `SmsReviewQueueReasonOptions` there): `null` until then.
- */
+/** An SMS reply the server could not apply. `reason` is `null` when the record has none. */
 export type ReviewItem = Pick<
   SmsReviewQueueResponse,
   'id' | 'from_phone' | 'body' | 'received_at'
 > & {
-  reason: string | null;
+  reason: NonNullable<SmsReviewQueueResponse['reason']> | null;
   member: Pick<MembersResponse, 'id' | 'name'> | null;
 };
 
@@ -108,7 +105,6 @@ export interface HuntFollowUpRepository {
   /** Rejects with `HuntActionError` when the server refuses. */
   sendInvitations(huntId: string): Promise<SendSummary>;
   resendFailed(huntId: string): Promise<SendSummary>;
-  /** Rejects with `FeatureUnavailableError` on a server without the cancellation route. */
   cancelHunt(huntId: string): Promise<CancelSummary>;
   /** An answer entered by the organizer (`answered_via: manual`). */
   setParticipation(invitationId: string, participation: ManualParticipation): Promise<void>;
@@ -145,14 +141,6 @@ export class HuntActionError extends Error {
   constructor(readonly code: HuntActionErrorCode | (string & {})) {
     super(`Refused by the server: ${code}`);
     this.name = 'HuntActionError';
-  }
-}
-
-/** The server does not offer this function yet (route answering 404). */
-export class FeatureUnavailableError extends Error {
-  constructor(readonly feature: string) {
-    super(`${feature} is not available on the server`);
-    this.name = 'FeatureUnavailableError';
   }
 }
 

@@ -5,7 +5,6 @@ import { ClientResponseError } from 'pocketbase';
 import HuntDetailScreen from '@/app/hunts/[id]';
 import {
   createInMemoryHuntFollowUp,
-  FeatureUnavailableError,
   HuntActionError,
   type HuntDetail,
   type CancelSummary,
@@ -824,22 +823,6 @@ describe('HuntDetailScreen', () => {
 
       expect(
         await screen.findByText("La battue n'a pas pu être annulée. Réessayez dans un moment.")
-      ).toBeOnTheScreen();
-    });
-
-    it('says when the server cannot cancel a hunt yet', async () => {
-      const user = userEvent.setup();
-      const followUp = sentHunt();
-      jest.spyOn(followUp, 'cancelHunt').mockRejectedValue(new FeatureUnavailableError('cancel'));
-      await openHunt(followUp);
-
-      await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
-      await user.press(await screen.findByRole('button', { name: 'Oui, annuler la battue' }));
-
-      expect(
-        await screen.findByText(
-          "Fonction pas encore disponible sur le serveur : la battue n'a pas été annulée."
-        )
       ).toBeOnTheScreen();
     });
   });

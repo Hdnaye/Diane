@@ -1,4 +1,4 @@
-import { FeatureUnavailableError, HuntActionError, HuntNotFoundError } from '@/data/hunt-follow-up';
+import { HuntActionError, HuntNotFoundError } from '@/data/hunt-follow-up';
 import { createPocketBaseHuntFollowUp } from '@/data/pocketbase-hunt-follow-up';
 import { createOrganizerSession, createPocketBaseClient } from '@/data/pocketbase-session';
 import {
@@ -237,12 +237,6 @@ describe('PocketBase hunt follow-up', () => {
 
     await expect(followUp.cancelHunt('hunt1')).resolves.toEqual(summary);
     expect(requests[1]).toMatchObject({ method: 'POST', path: '/api/diane/hunts/hunt1/cancel' });
-  });
-
-  it('says when the server cannot cancel a hunt yet', async () => {
-    const { followUp } = setUp(() => refusal(404));
-
-    await expect(followUp.cancelHunt('hunt1')).rejects.toBeInstanceOf(FeatureUnavailableError);
   });
 
   it('records an answer entered by the organizer', async () => {

@@ -2,7 +2,6 @@ import type PocketBase from 'pocketbase';
 import { ClientResponseError } from 'pocketbase';
 
 import {
-  FeatureUnavailableError,
   HuntActionError,
   HuntNotFoundError,
   participationAfterAnswer,
@@ -110,17 +109,7 @@ export function createPocketBaseHuntFollowUp(
     },
     sendInvitations: (huntId) => huntAction<SendSummary>(huntId, 'send-invitations'),
     resendFailed: (huntId) => huntAction<SendSummary>(huntId, 'resend-failed'),
-    async cancelHunt(huntId) {
-      try {
-        return await huntAction<CancelSummary>(huntId, 'cancel');
-      } catch (error) {
-        // A server older than the cancellation route answers 404.
-        if (status(error) === 404) {
-          throw new FeatureUnavailableError('cancel');
-        }
-        throw error;
-      }
-    },
+    cancelHunt: (huntId) => huntAction<CancelSummary>(huntId, 'cancel'),
     setParticipation: (id, participation) => updateInvitation(id, participation, 'manual'),
     async applyAnswer({ id, huntId }, answer) {
       const [{ participation: current }, attendance] = await Promise.all([
