@@ -273,6 +273,23 @@ describe('MessagesScreen', () => {
     });
   });
 
+  it('shows short answer buttons, that fit side by side on a narrow phone', async () => {
+    await openMessages(
+      createInMemoryHuntFollowUp({
+        hunts: [hunt('hunt1', '2026-11-14')],
+        members: [JEANNE],
+        invitations: [{ id: 'i1', huntId: 'hunt1', member: JEANNE }],
+        reviewItems: [FROM_JEANNE],
+      })
+    );
+
+    expect(await screen.findByText('Réponse à appliquer :')).toBeOnTheScreen();
+    const yes = screen.getByRole('button', { name: 'Appliquer OUI : Jeanne Fictive' });
+    const no = screen.getByRole('button', { name: 'Appliquer NON : Jeanne Fictive' });
+    expect(within(yes).getByText('OUI')).toBeOnTheScreen();
+    expect(within(no).getByText('NON')).toBeOnTheScreen();
+  });
+
   it('asks which hunt when the member has several open invitations', async () => {
     const user = userEvent.setup();
     const followUp = createInMemoryHuntFollowUp({
