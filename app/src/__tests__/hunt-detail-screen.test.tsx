@@ -153,7 +153,9 @@ describe('HuntDetailScreen', () => {
       await user.press(screen.getByRole('button', { name: 'Envoyer' }));
 
       expect(
-        await screen.findByText('3 adhérents invités : 3 SMS envoyés, 3 e-mails envoyés.')
+        await screen.findByText(
+          "3 invitations créées : 3 SMS transmis au téléphone d'envoi, 3 e-mails envoyés."
+        )
       ).toBeOnTheScreen();
       expect(screen.getByText('Invitations lancées')).toBeOnTheScreen();
       expect(
@@ -205,7 +207,7 @@ describe('HuntDetailScreen', () => {
 
       expect(
         await screen.findByText(
-          '20 adhérents invités : 18 SMS envoyés, 2 SMS non envoyés, 5 e-mails envoyés, 1 e-mail non envoyé.'
+          "20 invitations créées : 18 SMS transmis au téléphone d'envoi, 2 SMS non envoyés, 5 e-mails envoyés, 1 e-mail non envoyé."
         )
       ).toBeOnTheScreen();
     });
@@ -319,7 +321,9 @@ describe('HuntDetailScreen', () => {
       expect(screen.queryByText("SMS en cours d'envoi")).not.toBeOnTheScreen();
       await user.press(screen.getByRole('button', { name: 'Renvoyer les échecs' }));
 
-      expect(await screen.findByText('1 invitation renvoyée : 1 SMS envoyé.')).toBeOnTheScreen();
+      expect(
+        await screen.findByText("1 invitation reprise : 1 SMS transmis au téléphone d'envoi.")
+      ).toBeOnTheScreen();
       expect(screen.queryByText('SMS à renvoyer')).not.toBeOnTheScreen();
     });
 
@@ -385,7 +389,9 @@ describe('HuntDetailScreen', () => {
       expect(group('Sans réponse').getByText('SMS non envoyé')).toBeOnTheScreen();
       await user.press(screen.getByRole('button', { name: 'Renvoyer les échecs' }));
 
-      expect(await screen.findByText('1 invitation renvoyée : 1 SMS envoyé.')).toBeOnTheScreen();
+      expect(
+        await screen.findByText("1 invitation reprise : 1 SMS transmis au téléphone d'envoi.")
+      ).toBeOnTheScreen();
       expect(screen.queryByText('SMS non envoyé')).not.toBeOnTheScreen();
       expect(screen.queryByRole('button', { name: 'Renvoyer les échecs' })).not.toBeOnTheScreen();
     });
@@ -410,7 +416,9 @@ describe('HuntDetailScreen', () => {
       expect(screen.queryByText('SMS non envoyé')).not.toBeOnTheScreen();
       await user.press(screen.getByRole('button', { name: 'Renvoyer les échecs' }));
 
-      expect(await screen.findByText('1 invitation renvoyée : 1 SMS envoyé.')).toBeOnTheScreen();
+      expect(
+        await screen.findByText("1 invitation reprise : 1 SMS transmis au téléphone d'envoi.")
+      ).toBeOnTheScreen();
       expect(screen.queryByText('SMS pas encore envoyé')).not.toBeOnTheScreen();
     });
 
@@ -429,7 +437,7 @@ describe('HuntDetailScreen', () => {
 
       expect(
         await screen.findByText(
-          "3 adhérents invités : 1 SMS envoyé, 2 SMS pas encore envoyés. Le téléphone d'envoi ne répond pas : vérifiez-le, puis appuyez sur « Renvoyer les échecs »."
+          "3 invitations créées : 1 SMS transmis au téléphone d'envoi, 2 SMS pas encore envoyés. Le téléphone d'envoi ne répond pas : vérifiez-le, puis appuyez sur « Renvoyer les échecs »."
         )
       ).toBeOnTheScreen();
     });
@@ -569,7 +577,7 @@ describe('HuntDetailScreen', () => {
 
       expect(
         await screen.findByText(
-          'Battue annulée. 4 adhérents prévenus : 4 SMS envoyés, 4 e-mails envoyés.'
+          "Battue annulée. 4 adhérents concernés : 4 SMS transmis au téléphone d'envoi, 4 e-mails envoyés."
         )
       ).toBeOnTheScreen();
       expect(screen.getByText('Annulée')).toBeOnTheScreen();
@@ -591,7 +599,7 @@ describe('HuntDetailScreen', () => {
       expect(screen.getByText('Invitations lancées')).toBeOnTheScreen();
     });
 
-    it('does not count the notices that did not go out as members told', async () => {
+    it('says the notices that did not go out, without claiming anybody was told', async () => {
       const user = userEvent.setup();
       const followUp = sentHunt();
       jest.spyOn(followUp, 'cancelHunt').mockResolvedValue({
@@ -606,7 +614,7 @@ describe('HuntDetailScreen', () => {
 
       expect(
         await screen.findByText(
-          "Battue annulée. 3 adhérents concernés : 1 SMS envoyé, 2 SMS non envoyés. Prévenez directement ceux qui n'ont rien reçu."
+          "Battue annulée. 3 adhérents concernés : 1 SMS transmis au téléphone d'envoi, 2 SMS non envoyés. Prévenez directement ceux qui n'ont rien reçu."
         )
       ).toBeOnTheScreen();
     });
