@@ -359,7 +359,7 @@ export default function HuntDetailScreen() {
         (confirmation?.kind === 'cancel' ? (
           <ConfirmPanel
             variant="danger"
-            message={`Annuler la battue du ${day} ? Les invités qui n'ont pas répondu NON seront prévenus par SMS et e-mail. Cette action est définitive.`}
+            message={`Annuler la battue du ${day} ? L'envoi d'un avis par SMS et e-mail sera lancé pour les invités qui n'ont pas répondu NON. Cette action est définitive.`}
             confirmLabel="Oui, annuler la battue"
             cancelLabel="Non, garder la battue"
             onConfirm={cancelHunt}
