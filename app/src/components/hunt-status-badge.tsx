@@ -10,7 +10,8 @@ const STATUSES: Record<
   { label: string; icon: LucideIcon; variant: NonNullable<BadgeProps['variant']> }
 > = {
   draft: { label: 'Brouillon', icon: PencilLine, variant: 'neutral' },
-  invitations_sent: { label: 'Invitations envoyées', icon: Send, variant: 'success' },
+  // Set by the server before any message leaves, and kept when none does.
+  invitations_sent: { label: 'Invitations lancées', icon: Send, variant: 'neutral' },
   closed: { label: 'Terminée', icon: Lock, variant: 'neutral' },
   cancelled: { label: 'Annulée', icon: Ban, variant: 'danger' },
 };
