@@ -264,6 +264,48 @@ describe('HuntDetailScreen', () => {
       expect(screen.queryByText('SMS non envoyé')).not.toBeOnTheScreen();
       expect(screen.queryByRole('button', { name: 'Renvoyer les échecs' })).not.toBeOnTheScreen();
     });
+    it('shows a channel not attempted as waiting to be sent, not as a failure, and resends it', async () => {
+      const user = userEvent.setup();
+      const followUp = createInMemoryHuntFollowUp({
+        hunts: [aHuntDetail({ status: 'invitations_sent' })],
+        members: [HENRI],
+        invitations: [
+          {
+            id: 'i5',
+            huntId: 'hunt1',
+            member: HENRI,
+            sms_status: 'not_sent',
+            email_status: 'sent',
+          },
+        ],
+      });
+      await openHunt(followUp);
+
+      expect(await screen.findByText("SMS en attente d'envoi")).toBeOnTheScreen();
+      expect(screen.queryByText('SMS non envoyé')).not.toBeOnTheScreen();
+      await user.press(screen.getByRole('button', { name: 'Renvoyer les échecs' }));
+
+      expect(await screen.findByText('1 invitation renvoyée : 1 SMS envoyé.')).toBeOnTheScreen();
+      expect(screen.queryByText("SMS en attente d'envoi")).not.toBeOnTheScreen();
+    });
+
+    it('counts the messages not attempted in the summary', async () => {
+      const user = userEvent.setup();
+      const followUp = draft();
+      jest.spyOn(followUp, 'sendInvitations').mockResolvedValue({
+        invited: 3,
+        sms: { sent: 1, failed: 0, skipped: 0, not_sent: 2 },
+        email: { sent: 0, failed: 0, skipped: 3, not_sent: 0 },
+      });
+      await openHunt(followUp);
+
+      await user.press(await screen.findByRole('button', { name: 'Envoyer les invitations' }));
+      await user.press(await screen.findByRole('button', { name: 'Envoyer' }));
+
+      expect(
+        await screen.findByText("3 adhérents invités : 1 SMS envoyé, 2 SMS en attente d'envoi.")
+      ).toBeOnTheScreen();
+    });
   });
 
   describe('answers', () => {

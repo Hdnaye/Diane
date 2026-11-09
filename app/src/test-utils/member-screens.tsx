@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { renderRouter } from 'expo-router/testing-library';
 import type { ComponentType } from 'react';
 
+import { createInMemoryHuntFollowUp } from '@/data/hunt-follow-up';
 import { createInMemoryHuntRepository } from '@/data/hunt-repository';
 import { HuntRepositoryProvider } from '@/data/hunt-repository-context';
 import {
@@ -38,7 +39,10 @@ export async function renderMemberScreens(
   function TestLayout() {
     return (
       <QueryClientProvider client={queryClient}>
-        <HuntRepositoryProvider repository={hunts} connection={connection}>
+        <HuntRepositoryProvider
+          repository={hunts}
+          connection={connection}
+          followUp={createInMemoryHuntFollowUp()}>
           <MemberRepositoryProvider repository={repository}>
             <Stack />
           </MemberRepositoryProvider>
