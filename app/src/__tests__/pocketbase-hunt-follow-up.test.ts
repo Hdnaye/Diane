@@ -325,7 +325,7 @@ describe('PocketBase hunt follow-up', () => {
         from_phone: '+33639985678',
         body: 'OUI',
         received_at: '2026-11-08T06:00:00.000Z',
-        // No reason before the server records it (backend PR #12).
+        // No reason recorded.
         reason: null,
         member: null,
       },
