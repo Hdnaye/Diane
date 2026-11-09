@@ -101,7 +101,7 @@ export default function HuntDetailScreen() {
   // Shared by every screen of this hunt: opened again during a sending, it stays in progress.
   const sending = useIsSending(id);
   const cancel = useCancelHunt(id);
-  const setParticipation = useSetParticipation(id);
+  const setParticipation = useSetParticipation();
 
   async function refresh() {
     setRefreshing(true);

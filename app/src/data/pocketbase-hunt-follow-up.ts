@@ -79,7 +79,7 @@ export function createPocketBaseHuntFollowUp(
           () => pb.collection(Collections.Hunts).getOne<HuntsResponse>(id),
           { isDoubtful: notFound }
         );
-        return { ...toHunt(record), status: record.status };
+        return toHunt(record);
       } catch (error) {
         if (status(error) === 404) {
           throw new HuntNotFoundError(id);

@@ -10,7 +10,7 @@ import type {
 
 export type HuntStatus = HuntsResponse['status'];
 
-export type HuntDetail = Hunt & { status: HuntStatus };
+export type HuntDetail = Hunt;
 
 export type Participation = InvitationsResponse['participation'];
 

@@ -57,9 +57,9 @@ export function useActiveMemberCount(enabled: boolean) {
 }
 
 /** After an action on a hunt: its status, its answers and the hunt list may have changed. */
-function useRefreshHunt(huntId: string) {
+function useRefreshHunts() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: followUpKeys.hunt(huntId) });
+  return () => queryClient.invalidateQueries({ queryKey: huntKeys.all });
 }
 
 /**
@@ -70,7 +70,7 @@ function useRefreshHunt(huntId: string) {
  */
 export function useSendInvitations(huntId: string) {
   const followUp = useHuntFollowUpRepository();
-  const refresh = useRefreshHunt(huntId);
+  const refresh = useRefreshHunts();
   return useMutation({
     mutationKey: followUpKeys.sending(huntId),
     mutationFn: () => followUp.sendInvitations(huntId),
@@ -85,7 +85,7 @@ export function useIsSending(huntId: string): boolean {
 
 export function useResendFailed(huntId: string) {
   const followUp = useHuntFollowUpRepository();
-  const refresh = useRefreshHunt(huntId);
+  const refresh = useRefreshHunts();
   return useMutation({
     mutationFn: () => followUp.resendFailed(huntId),
     onSettled: refresh,
@@ -94,16 +94,16 @@ export function useResendFailed(huntId: string) {
 
 export function useCancelHunt(huntId: string) {
   const followUp = useHuntFollowUpRepository();
-  const refresh = useRefreshHunt(huntId);
+  const refresh = useRefreshHunts();
   return useMutation({
     mutationFn: () => followUp.cancelHunt(huntId),
     onSettled: refresh,
   });
 }
 
-export function useSetParticipation(huntId: string) {
+export function useSetParticipation() {
   const followUp = useHuntFollowUpRepository();
-  const refresh = useRefreshHunt(huntId);
+  const refresh = useRefreshHunts();
   return useMutation({
     mutationFn: ({ id, participation }: { id: string; participation: ManualParticipation }) =>
       followUp.setParticipation(id, participation),

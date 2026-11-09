@@ -11,8 +11,8 @@ const hunt = (date: string): NewHunt => ({
 describe('in-memory hunt repository', () => {
   it('lists the hunts sorted by day', async () => {
     const repository = createInMemoryHuntRepository([
-      { ...hunt('2026-11-21'), id: 'b' },
-      { ...hunt('2026-11-14'), id: 'a' },
+      { ...hunt('2026-11-21'), id: 'b', status: 'draft' },
+      { ...hunt('2026-11-14'), id: 'a', status: 'draft' },
     ]);
 
     const hunts = await repository.list();

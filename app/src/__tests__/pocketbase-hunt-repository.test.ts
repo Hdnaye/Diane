@@ -124,7 +124,7 @@ describe('PocketBase hunt repository', () => {
         status: 'draft',
       },
     });
-    expect(created).toEqual({ ...newHunt, id: 'hunt3' });
+    expect(created).toEqual({ ...newHunt, id: 'hunt3', status: 'draft' });
   });
 
   it('stores "no limit" as 0', async () => {

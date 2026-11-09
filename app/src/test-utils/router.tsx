@@ -55,6 +55,7 @@ export function aHunt(overrides: Partial<Hunt> & Pick<Hunt, 'date'>): Hunt {
     meeting_time: '08:00',
     max_participants: null,
     response_deadline: '2026-11-01T19:00:00.000Z',
+    status: 'draft',
     ...overrides,
   };
 }

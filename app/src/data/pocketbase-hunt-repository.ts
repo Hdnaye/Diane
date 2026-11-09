@@ -51,6 +51,7 @@ export function toHunt(record: HuntsResponse): Hunt {
     // 0 (empty) in PocketBase: no limit.
     max_participants: record.max_participants || null,
     response_deadline: toIsoInstant(record.response_deadline),
+    status: record.status,
   };
 }
 

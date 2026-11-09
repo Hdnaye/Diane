@@ -30,7 +30,7 @@ export function createInMemoryHuntRepository(initial: Hunt[] = []): HuntReposito
       if (hunts.some((existing) => existing.date === newHunt.date)) {
         throw new HuntDayTakenError(newHunt.date);
       }
-      const hunt = { ...newHunt, id: `local-${nextId++}` };
+      const hunt: Hunt = { ...newHunt, id: `local-${nextId++}`, status: 'draft' };
       hunts.push(hunt);
       return hunt;
     },

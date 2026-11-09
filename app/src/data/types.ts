@@ -7,8 +7,11 @@ import type { HuntsResponse } from '@/lib/pocketbase-types';
  * Paris meeting time (`HH:mm`), `response_deadline` an ISO 8601 instant before the hunt.
  * `max_participants` is `null` when there is no limit (stored as 0 in PocketBase).
  */
-export type Hunt = Pick<HuntsResponse, 'id' | 'date' | 'meeting_time' | 'response_deadline'> & {
+export type Hunt = Pick<
+  HuntsResponse,
+  'id' | 'date' | 'meeting_time' | 'response_deadline' | 'status'
+> & {
   max_participants: NonNullable<HuntsResponse['max_participants']> | null;
 };
 
-export type NewHunt = Omit<Hunt, 'id'>;
+export type NewHunt = Omit<Hunt, 'id' | 'status'>;
