@@ -35,9 +35,10 @@ export default function MessagesScreen() {
           {notice.text}
         </Text>
       )}
-      {items.isPending ? (
+      {/* A failed refresh keeps what is shown: the next one comes soon. */}
+      {items.data === undefined && !items.isError ? (
         <Text className="text-muted-foreground">Chargement des messages…</Text>
-      ) : items.isError ? (
+      ) : items.data === undefined ? (
         <View className="gap-4">
           <Text role="alert" className="font-sans-bold text-danger">
             Impossible de charger les messages. Vérifiez la connexion.

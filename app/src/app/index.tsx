@@ -77,9 +77,9 @@ export default function HomeScreen() {
           <Text variant="h2">Prochaines battues</Text>
           {connection.isPending ? (
             <Text className="text-muted-foreground">Connexion au serveur…</Text>
-          ) : huntsQuery.isPending ? (
+          ) : huntsQuery.data === undefined && !huntsQuery.isError ? (
             <Text className="text-muted-foreground">Chargement des battues…</Text>
-          ) : huntsQuery.isError ? (
+          ) : huntsQuery.data === undefined ? (
             <View className="gap-4">
               <Text role="alert" className="font-sans-bold text-danger">
                 Impossible de charger les battues. Vérifiez la connexion.
