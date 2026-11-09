@@ -7,12 +7,14 @@ import { Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { appBackend } from '@/data/app-backend';
 import { HuntRepositoryProvider } from '@/data/hunt-repository-context';
 import { MemberRepositoryProvider } from '@/data/member-repository-context';
 import { queryClient } from '@/lib/query-client';
-import { NAV_THEME } from '@/lib/theme';
+import { NAV_THEME, SCREEN_OPTIONS } from '@/lib/theme';
 import { fontAssets } from '@/theme/fonts';
 
 export {
@@ -24,6 +26,7 @@ export {
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const insets = useSafeAreaInsets();
   const [fontsLoaded, fontError] = useFonts(fontAssets);
   // If the font cannot be loaded, show the app anyway in the system font.
   const ready = fontsLoaded || fontError !== null;
@@ -47,9 +50,15 @@ export default function RootLayout() {
         <MemberRepositoryProvider repository={appBackend.members}>
           <ThemeProvider value={NAV_THEME}>
             <StatusBar style="dark" />
-            <Stack>
-              <Stack.Screen name="index" options={{ headerShown: false }} />
-            </Stack>
+            {/* Above the home indicator or the navigation bar, for every screen. */}
+            <View
+              testID="screens"
+              className="flex-1 bg-background"
+              style={{ paddingBottom: insets.bottom }}>
+              <Stack screenOptions={SCREEN_OPTIONS}>
+                <Stack.Screen name="index" options={{ headerShown: false }} />
+              </Stack>
+            </View>
             <PortalHost />
           </ThemeProvider>
         </MemberRepositoryProvider>
