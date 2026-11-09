@@ -411,7 +411,8 @@ message (tested).
 
 ### Reminders
 
-A cron (`dianeReminders`, every 10 minutes, `pb_hooks/reminders.pb.js`)
+A cron (`dianeReminders`, every 10 minutes, or the cron expression
+`DIANE_REMINDER_SCHEDULE` (tests), `pb_hooks/reminders.pb.js`)
 reminds the members who have not answered, 24 hours before the response
 deadline: invitations still `pending` of active members, hunts
 `invitations_sent` (not cancelled or closed) with a deadline, once
