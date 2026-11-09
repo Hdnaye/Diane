@@ -1,4 +1,6 @@
+import type { HuntFollowUpRepository } from '@/data/hunt-follow-up';
 import type { HuntRepository } from '@/data/hunt-repository';
+import { createPocketBaseHuntFollowUp } from '@/data/pocketbase-hunt-follow-up';
 import type { MemberRepository } from '@/data/member-repository';
 import { createPocketBaseHuntRepository } from '@/data/pocketbase-hunt-repository';
 import { createPocketBaseMemberRepository } from '@/data/pocketbase-member-repository';
@@ -9,6 +11,7 @@ import { readApiConfig, type ApiConfig } from '@/lib/api-config';
 export type AppBackend = {
   connection: ServerConnection;
   repository: HuntRepository;
+  followUp: HuntFollowUpRepository;
   members: MemberRepository;
 };
 
@@ -19,6 +22,19 @@ export function createAppBackend(config: ApiConfig | null): AppBackend {
     return {
       connection: { connect: fail },
       repository: { list: fail, create: fail },
+      followUp: {
+        getHunt: fail,
+        listInvitations: fail,
+        countActiveMembers: fail,
+        sendInvitations: fail,
+        resendFailed: fail,
+        cancelHunt: fail,
+        setParticipation: fail,
+        applyAnswer: fail,
+        listReviewItems: fail,
+        resolveReviewItem: fail,
+        listOpenInvitations: fail,
+      },
       members: { list: fail, create: fail, update: fail, remove: fail, setActive: fail },
     };
   }
@@ -27,6 +43,7 @@ export function createAppBackend(config: ApiConfig | null): AppBackend {
   return {
     connection: { connect: () => session.connect() },
     repository: createPocketBaseHuntRepository(pb, session),
+    followUp: createPocketBaseHuntFollowUp(pb, session),
     members: createPocketBaseMemberRepository(pb, session),
   };
 }

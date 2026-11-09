@@ -1,0 +1,345 @@
+import { act, userEvent, within } from '@testing-library/react-native';
+import { screen } from 'expo-router/testing-library';
+
+import MessagesScreen from '@/app/messages';
+import {
+  createInMemoryHuntFollowUp,
+  type HuntDetail,
+  type ReviewItem,
+} from '@/data/hunt-follow-up';
+import { REVIEW_REFRESH_MS } from '@/data/hunt-follow-up-queries';
+import { freezeDate, unfreezeDate } from '@/test-utils/clock';
+import { renderScreens } from '@/test-utils/router';
+
+// Sunday 8 November 2026, 10:00 in Paris (the tests run with the phone in New York).
+const TODAY = new Date('2026-11-08T09:00:00Z');
+
+// Fictitious members, numbers in the range reserved for fiction (ARCEP).
+const JEANNE = { id: 'm1', name: 'Jeanne Fictive' };
+const PAUL = { id: 'm2', name: 'Paul Exemple' };
+
+const hunt = (id: string, date: string): HuntDetail => ({
+  id,
+  date,
+  meeting_time: '08:00',
+  max_participants: 12,
+  response_deadline: '2026-11-10T19:00:00.000Z',
+  status: 'invitations_sent',
+});
+
+const FROM_JEANNE: ReviewItem = {
+  id: 's1',
+  from_phone: '+33639981234',
+  body: 'Oui si il fait beau',
+  received_at: '2026-11-08T07:15:00.000Z',
+  reason: 'ambiguous',
+  member: JEANNE,
+};
+
+const FROM_UNKNOWN: ReviewItem = {
+  id: 's2',
+  from_phone: '+33639985678',
+  body: 'OUI',
+  received_at: '2026-11-08T06:00:00.000Z',
+  reason: 'unknown_sender',
+  member: null,
+};
+
+function openMessages(followUp = createInMemoryHuntFollowUp()) {
+  return renderScreens({ messages: MessagesScreen }, { initialUrl: '/messages', followUp });
+}
+
+/** The card of the message sent by `sender`. */
+function message(sender: string) {
+  return within(screen.getByLabelText(`Message de ${sender}`));
+}
+
+describe('MessagesScreen', () => {
+  beforeEach(() => freezeDate(TODAY));
+  afterEach(unfreezeDate);
+
+  it('lists the SMS to check, newest first, with their date, sender, text and reason', async () => {
+    await openMessages(createInMemoryHuntFollowUp({ reviewItems: [FROM_UNKNOWN, FROM_JEANNE] }));
+
+    expect(await screen.findByRole('heading', { name: 'Messages à vérifier' })).toBeOnTheScreen();
+    const senders = await screen.findAllByLabelText(/^Message de /);
+    expect(senders.map((card) => card.props['aria-label'])).toEqual([
+      'Message de Jeanne Fictive',
+      'Message de 06 39 98 56 78',
+    ]);
+    expect(message('Jeanne Fictive').getByText('dimanche 8 novembre à 8 h 15')).toBeOnTheScreen();
+    expect(message('Jeanne Fictive').getByText('« Oui si il fait beau »')).toBeOnTheScreen();
+    expect(
+      message('Jeanne Fictive').getByText('Réponse ambiguë ou conditionnelle')
+    ).toBeOnTheScreen();
+    expect(message('06 39 98 56 78').getByText('« OUI »')).toBeOnTheScreen();
+    expect(message('06 39 98 56 78').getByText('Numéro inconnu')).toBeOnTheScreen();
+    // An unknown sender has no invitation to apply the answer to.
+    expect(
+      message('06 39 98 56 78').queryByRole('button', { name: /^Appliquer/ })
+    ).not.toBeOnTheScreen();
+  });
+
+  it('says when there is nothing to check', async () => {
+    await openMessages();
+
+    expect(await screen.findByText('Aucun message à vérifier.')).toBeOnTheScreen();
+  });
+
+  it('says when the messages cannot be loaded and lets the organizer retry', async () => {
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({ reviewItems: [FROM_UNKNOWN] });
+    jest.spyOn(followUp, 'listReviewItems').mockRejectedValueOnce(new Error('network down'));
+    await openMessages(followUp);
+
+    expect(
+      await screen.findByText('Impossible de charger les messages. Vérifiez la connexion.')
+    ).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Réessayer' }));
+
+    expect(await screen.findByLabelText('Message de 06 39 98 56 78')).toBeOnTheScreen();
+  });
+
+  it('leaves the list shown, with the hunt chosen, when a refresh fails', async () => {
+    jest.useFakeTimers({ now: TODAY, advanceTimers: true });
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({
+      hunts: [hunt('hunt1', '2026-11-14'), hunt('hunt2', '2026-11-21')],
+      members: [JEANNE],
+      invitations: [
+        { id: 'i1', huntId: 'hunt1', member: JEANNE },
+        { id: 'i2', huntId: 'hunt2', member: JEANNE },
+      ],
+      reviewItems: [FROM_JEANNE],
+    });
+    await openMessages(followUp);
+    await user.press(await screen.findByRole('radio', { name: 'samedi 21 novembre' }));
+
+    const refresh = jest
+      .spyOn(followUp, 'listReviewItems')
+      .mockRejectedValueOnce(new Error('network down'));
+    await act(() => jest.advanceTimersByTimeAsync(REVIEW_REFRESH_MS));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await act(() => jest.advanceTimersByTimeAsync(100));
+
+    expect(
+      screen.queryByText('Impossible de charger les messages. Vérifiez la connexion.')
+    ).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Message de Jeanne Fictive')).toBeOnTheScreen();
+    expect(screen.getByRole('radio', { name: 'samedi 21 novembre' })).toBeChecked();
+  });
+
+  it('says when a message cannot be marked as handled, and keeps it', async () => {
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({ reviewItems: [FROM_UNKNOWN] });
+    jest.spyOn(followUp, 'resolveReviewItem').mockRejectedValue(new Error('network down'));
+    await openMessages(followUp);
+
+    await user.press(
+      await screen.findByRole('button', { name: 'Marquer comme traité : 06 39 98 56 78' })
+    );
+
+    expect(
+      await screen.findByText(
+        "Le message n'a pas pu être marqué comme traité. Vérifiez la connexion."
+      )
+    ).toBeOnTheScreen();
+    expect(screen.getByLabelText('Message de 06 39 98 56 78')).toBeOnTheScreen();
+  });
+
+  it('says when an answer cannot be applied, and keeps the message', async () => {
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({
+      hunts: [hunt('hunt1', '2026-11-14')],
+      members: [JEANNE],
+      invitations: [{ id: 'i1', huntId: 'hunt1', member: JEANNE }],
+      reviewItems: [FROM_JEANNE],
+    });
+    jest.spyOn(followUp, 'applyAnswer').mockRejectedValue(new Error('network down'));
+    await openMessages(followUp);
+
+    await user.press(await screen.findByRole('button', { name: 'Appliquer OUI : Jeanne Fictive' }));
+
+    expect(
+      await screen.findByText(
+        "La réponse n'a pas pu être appliquée. Vérifiez la connexion, puis réessayez."
+      )
+    ).toBeOnTheScreen();
+    expect(screen.getByLabelText('Message de Jeanne Fictive')).toBeOnTheScreen();
+  });
+
+  it("says when the member's hunts cannot be loaded", async () => {
+    const followUp = createInMemoryHuntFollowUp({ members: [JEANNE], reviewItems: [FROM_JEANNE] });
+    jest.spyOn(followUp, 'listOpenInvitations').mockRejectedValue(new Error('network down'));
+    await openMessages(followUp);
+
+    expect(
+      await screen.findByText('Impossible de charger les battues de cet adhérent.')
+    ).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Appliquer/ })).not.toBeOnTheScreen();
+  });
+
+  it('marks a message as handled', async () => {
+    const user = userEvent.setup();
+    await openMessages(createInMemoryHuntFollowUp({ reviewItems: [FROM_UNKNOWN, FROM_JEANNE] }));
+
+    await user.press(
+      await screen.findByRole('button', { name: 'Marquer comme traité : 06 39 98 56 78' })
+    );
+
+    expect(await screen.findByText('Message marqué comme traité.')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Message de 06 39 98 56 78')).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Message de Jeanne Fictive')).toBeOnTheScreen();
+  });
+
+  it("applies the answer to the member's only open invitation", async () => {
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({
+      hunts: [hunt('hunt1', '2026-11-14')],
+      members: [JEANNE],
+      invitations: [{ id: 'i1', huntId: 'hunt1', member: JEANNE }],
+      reviewItems: [FROM_JEANNE],
+    });
+    await openMessages(followUp);
+
+    expect(await screen.findByText('Battue du samedi 14 novembre')).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Appliquer OUI : Jeanne Fictive' }));
+
+    expect(
+      await screen.findByText('Réponse OUI appliquée à la battue du samedi 14 novembre.')
+    ).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Message de Jeanne Fictive')).not.toBeOnTheScreen();
+    const [invitation] = await followUp.listInvitations('hunt1');
+    expect(invitation).toMatchObject({ participation: 'present', answered_via: 'sms' });
+  });
+
+  describe('applying OUI, with the rule of the server', () => {
+    /** A hunt with one free place, Paul already waiting, and Jeanne's message to apply. */
+    const waitingHunt = (participation: 'pending' | 'present' | 'waiting_list') =>
+      createInMemoryHuntFollowUp({
+        hunts: [{ ...hunt('hunt1', '2026-11-14'), max_participants: 1 }],
+        members: [JEANNE, PAUL],
+        invitations: [
+          {
+            id: 'i1',
+            huntId: 'hunt1',
+            member: JEANNE,
+            participation,
+            answered_via: 'web',
+            answered_at: '2026-11-07T10:00:00.000Z',
+          },
+          {
+            id: 'i2',
+            huntId: 'hunt1',
+            member: PAUL,
+            participation: 'waiting_list',
+            answered_via: 'web',
+            answered_at: '2026-11-07T11:00:00.000Z',
+          },
+        ],
+        reviewItems: [FROM_JEANNE],
+      });
+
+    async function applyYes(followUp: ReturnType<typeof createInMemoryHuntFollowUp>) {
+      const user = userEvent.setup();
+      await openMessages(followUp);
+      await user.press(
+        await screen.findByRole('button', { name: 'Appliquer OUI : Jeanne Fictive' })
+      );
+      await screen.findByText('Réponse OUI appliquée à la battue du samedi 14 novembre.');
+      return (await followUp.listInvitations('hunt1'))[0];
+    }
+
+    it('does not pass the members already on the waiting list', async () => {
+      expect(await applyYes(waitingHunt('pending'))).toMatchObject({
+        participation: 'waiting_list',
+        answered_via: 'sms',
+      });
+    });
+
+    it('keeps a member already present, even on a full hunt', async () => {
+      expect(await applyYes(waitingHunt('present'))).toMatchObject({
+        participation: 'present',
+        answered_via: 'web',
+      });
+    });
+
+    it('keeps the rank of a member already on the waiting list', async () => {
+      expect(await applyYes(waitingHunt('waiting_list'))).toMatchObject({
+        participation: 'waiting_list',
+        answered_via: 'web',
+        answered_at: '2026-11-07T10:00:00.000Z',
+      });
+    });
+  });
+
+  it('shows short answer buttons, that fit side by side on a narrow phone', async () => {
+    await openMessages(
+      createInMemoryHuntFollowUp({
+        hunts: [hunt('hunt1', '2026-11-14')],
+        members: [JEANNE],
+        invitations: [{ id: 'i1', huntId: 'hunt1', member: JEANNE }],
+        reviewItems: [FROM_JEANNE],
+      })
+    );
+
+    expect(await screen.findByText('Réponse à appliquer :')).toBeOnTheScreen();
+    const yes = screen.getByRole('button', { name: 'Appliquer OUI : Jeanne Fictive' });
+    const no = screen.getByRole('button', { name: 'Appliquer NON : Jeanne Fictive' });
+    expect(within(yes).getByText('OUI')).toBeOnTheScreen();
+    expect(within(no).getByText('NON')).toBeOnTheScreen();
+  });
+
+  it('asks which hunt when the member has several open invitations', async () => {
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({
+      hunts: [hunt('hunt1', '2026-11-14'), hunt('hunt2', '2026-11-21')],
+      members: [JEANNE],
+      invitations: [
+        { id: 'i1', huntId: 'hunt1', member: JEANNE },
+        { id: 'i2', huntId: 'hunt2', member: JEANNE },
+      ],
+      reviewItems: [FROM_JEANNE],
+    });
+    await openMessages(followUp);
+
+    expect(await screen.findByRole('radio', { name: 'samedi 14 novembre' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Appliquer NON : Jeanne Fictive' })).toBeDisabled();
+
+    await user.press(screen.getByRole('radio', { name: 'samedi 21 novembre' }));
+    expect(screen.getByRole('radio', { name: 'samedi 21 novembre' })).toBeChecked();
+    await user.press(screen.getByRole('button', { name: 'Appliquer NON : Jeanne Fictive' }));
+
+    expect(
+      await screen.findByText('Réponse NON appliquée à la battue du samedi 21 novembre.')
+    ).toBeOnTheScreen();
+    expect((await followUp.listInvitations('hunt2'))[0].participation).toBe('absent');
+    expect((await followUp.listInvitations('hunt1'))[0].participation).toBe('pending');
+  });
+
+  it('does not offer a closed hunt, whose answers the server refuses', async () => {
+    await openMessages(
+      createInMemoryHuntFollowUp({
+        hunts: [{ ...hunt('hunt1', '2026-11-14'), status: 'closed' }],
+        members: [JEANNE],
+        invitations: [{ id: 'i1', huntId: 'hunt1', member: JEANNE }],
+        reviewItems: [FROM_JEANNE],
+      })
+    );
+
+    expect(
+      await screen.findByText('Pas de battue ouverte à laquelle appliquer la réponse.')
+    ).toBeOnTheScreen();
+  });
+
+  it('says when the member has no open invitation', async () => {
+    await openMessages(
+      createInMemoryHuntFollowUp({ members: [JEANNE, PAUL], reviewItems: [FROM_JEANNE] })
+    );
+
+    expect(
+      await screen.findByText('Pas de battue ouverte à laquelle appliquer la réponse.')
+    ).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Appliquer/ })).not.toBeOnTheScreen();
+  });
+});

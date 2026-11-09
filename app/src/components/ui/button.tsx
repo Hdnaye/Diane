@@ -24,9 +24,9 @@ const buttonVariants = cva(
         danger: cn('bg-danger active:bg-danger/90', Platform.select({ web: 'hover:bg-danger/90' })),
       },
       size: {
-        default: 'h-touch px-6',
-        sm: 'h-touch-min gap-1.5 px-4',
-        lg: 'h-touch-lg px-8',
+        default: 'min-h-touch px-6 py-2',
+        sm: 'min-h-touch-min gap-1.5 px-4 py-1',
+        lg: 'min-h-touch-lg px-8 py-2',
         icon: 'h-touch w-touch',
       },
       disabled: {
@@ -43,7 +43,10 @@ const buttonVariants = cva(
 );
 
 const buttonTextVariants = cva(
-  cn('font-sans-bold text-base', Platform.select({ web: 'pointer-events-none transition-colors' })),
+  cn(
+    'shrink text-center font-sans-bold text-base',
+    Platform.select({ web: 'pointer-events-none transition-colors' })
+  ),
   {
     variants: {
       variant: {

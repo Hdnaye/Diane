@@ -1,10 +1,11 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useIsFocused } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HuntCalendar } from '@/components/hunt-calendar';
 import { HuntCard } from '@/components/hunt-card';
+import { ReviewLink } from '@/components/review-link';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useHunts, useServerConnection } from '@/data/hunt-queries';
@@ -20,6 +21,14 @@ export default function HomeScreen() {
   const huntsQuery = useHunts();
   const hunts = huntsQuery.data ?? [];
   const [selectedDate, setSelectedDate] = useState<string>();
+
+  // The list is not refreshed regularly: one that could not be updated is loaded again on return.
+  const focused = useIsFocused();
+  const outOfDate = huntsQuery.isError && huntsQuery.data !== undefined;
+  const { refetch: reloadHunts } = huntsQuery;
+  useEffect(() => {
+    if (focused && outOfDate) reloadHunts();
+  }, [focused, outOfDate, reloadHunts]);
 
   const today = parisDay(new Date());
   const upcoming = hunts.filter((hunt) => hunt.date >= today);
@@ -53,6 +62,10 @@ export default function HomeScreen() {
           selectedDate={selectedDate}
           minDate={today}
           onSelectDate={setSelectedDate}
+          onSelectHunt={(date) => {
+            const hunt = hunts.find((candidate) => candidate.date === date);
+            if (hunt) router.push(`/hunts/${hunt.id}`);
+          }}
         />
       </View>
       <Button
@@ -66,14 +79,25 @@ export default function HomeScreen() {
       <Button variant="secondary" className="w-full" onPress={() => router.push('/members')}>
         <Text>Adhérents</Text>
       </Button>
+      <ReviewLink />
       {!connection.isError && (
         <>
           <Text variant="h2">Prochaines battues</Text>
+          {outOfDate && (
+            <View className="gap-4">
+              <Text role="alert" className="font-sans-bold text-danger">
+                La liste n&apos;a pas pu être mise à jour. Vérifiez la connexion.
+              </Text>
+              <Button variant="secondary" onPress={() => huntsQuery.refetch()}>
+                <Text>Réessayer</Text>
+              </Button>
+            </View>
+          )}
           {connection.isPending ? (
             <Text className="text-muted-foreground">Connexion au serveur…</Text>
-          ) : huntsQuery.isPending ? (
+          ) : huntsQuery.data === undefined && !huntsQuery.isError ? (
             <Text className="text-muted-foreground">Chargement des battues…</Text>
-          ) : huntsQuery.isError ? (
+          ) : huntsQuery.data === undefined ? (
             <View className="gap-4">
               <Text role="alert" className="font-sans-bold text-danger">
                 Impossible de charger les battues. Vérifiez la connexion.
@@ -85,7 +109,13 @@ export default function HomeScreen() {
           ) : upcoming.length === 0 ? (
             <Text className="text-muted-foreground">Aucune battue prévue.</Text>
           ) : (
-            upcoming.map((hunt) => <HuntCard key={hunt.id} hunt={hunt} />)
+            upcoming.map((hunt) => (
+              <HuntCard
+                key={hunt.id}
+                hunt={hunt}
+                onPress={() => router.push(`/hunts/${hunt.id}`)}
+              />
+            ))
           )}
         </>
       )}

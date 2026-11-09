@@ -67,4 +67,24 @@ describe('Button', () => {
       expect.stringContaining('text-muted-foreground')
     );
   });
+
+  it.each([
+    ['default', 'min-h-touch'],
+    ['sm', 'min-h-touch-min'],
+    ['lg', 'min-h-touch-lg'],
+  ] as const)(
+    'grows with its text rather than cutting it (%s): a large system font, a narrow phone',
+    async (size, height) => {
+      await render(
+        <Button size={size} aria-label="Essai">
+          <Text>Essai</Text>
+        </Button>
+      );
+
+      expect(screen.getByRole('button', { name: 'Essai' })).toHaveProp(
+        'className',
+        expect.stringContaining(height)
+      );
+    }
+  );
 });

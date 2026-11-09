@@ -1,9 +1,13 @@
-import { userEvent } from '@testing-library/react-native';
+import { act, userEvent, waitFor } from '@testing-library/react-native';
+import { router } from 'expo-router';
 import { screen } from 'expo-router/testing-library';
 import { Text } from 'react-native';
 
 import HomeScreen from '@/app/index';
+import HuntDetailScreen from '@/app/hunts/[id]';
 import NewHuntScreen from '@/app/hunts/new';
+import { createInMemoryHuntFollowUp } from '@/data/hunt-follow-up';
+import { REVIEW_REFRESH_MS } from '@/data/hunt-follow-up-queries';
 import type { HuntRepository } from '@/data/hunt-repository';
 import { ServerConfigMissingError, type ServerConnection } from '@/data/server-connection';
 import type { Hunt } from '@/data/types';
@@ -21,6 +25,14 @@ const HUNTS = [
 
 function NewHuntStub() {
   return <Text>Formulaire de création</Text>;
+}
+
+function HuntStub() {
+  return <Text>Fiche de la battue</Text>;
+}
+
+function MessagesStub() {
+  return <Text>Liste des messages</Text>;
 }
 
 describe('HomeScreen', () => {
@@ -93,12 +105,206 @@ describe('HomeScreen', () => {
     ).not.toBeOnTheScreen();
   });
 
-  it('marks the hunt days in the calendar', async () => {
-    await renderScreens({ index: HomeScreen }, { hunts: HUNTS });
+  it('marks the hunt days in the calendar, and opens a hunt from its day', async () => {
+    const user = userEvent.setup();
+    await renderScreens({ index: HomeScreen, 'hunts/[id]': HuntStub }, { hunts: HUNTS });
+
+    await user.press(
+      await screen.findByRole('button', { name: 'samedi 14 novembre 2026, battue prévue' })
+    );
+
+    expect(await screen.findByText('Fiche de la battue')).toBeOnTheScreen();
+    expect(screen).toHavePathname('/hunts/hunt-2026-11-14');
+  });
+
+  it('opens a hunt from its card', async () => {
+    const user = userEvent.setup();
+    await renderScreens({ index: HomeScreen, 'hunts/[id]': HuntStub }, { hunts: HUNTS });
+
+    await user.press(
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 21 novembre' })
+    );
+
+    expect(await screen.findByText('Fiche de la battue')).toBeOnTheScreen();
+    expect(screen).toHavePathname('/hunts/hunt-2026-11-21');
+  });
+
+  it('says on its card that a hunt is cancelled', async () => {
+    await renderScreens(
+      { index: HomeScreen },
+      { hunts: [aHunt({ id: 'hunt1', date: '2026-11-14', status: 'cancelled' })] }
+    );
 
     expect(
-      await screen.findByRole('button', { name: 'samedi 14 novembre 2026, battue prévue' })
-    ).toBeDisabled();
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre, annulée' })
+    ).toBeOnTheScreen();
+    expect(screen.getByText('Annulée')).toBeOnTheScreen();
+  });
+
+  it('shows no status on the card of a hunt not cancelled', async () => {
+    await renderScreens({ index: HomeScreen }, { hunts: [aHunt({ date: '2026-11-14' })] });
+
+    expect(
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre' })
+    ).toBeOnTheScreen();
+    expect(screen.queryByText('Annulée')).not.toBeOnTheScreen();
+  });
+
+  it('refreshes the list after a hunt is cancelled from its screen', async () => {
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({
+      hunts: [{ ...aHunt({ id: 'hunt1', date: '2026-11-14' }), status: 'invitations_sent' }],
+    });
+    // The list and the screen of the hunt read the same data, as on the server.
+    const repository: HuntRepository = {
+      list: async () => [await followUp.getHunt('hunt1')],
+      create: () => Promise.reject(new Error('not used')),
+    };
+    await renderScreens(
+      { index: HomeScreen, 'hunts/[id]': HuntDetailScreen },
+      { repository, followUp }
+    );
+
+    await user.press(
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre' })
+    );
+    await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
+    await user.press(await screen.findByRole('button', { name: 'Oui, annuler la battue' }));
+    expect(await screen.findByText('Battue annulée. Aucun adhérent à prévenir.')).toBeOnTheScreen();
+    await act(() => router.back());
+
+    expect(
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre, annulée' })
+    ).toBeOnTheScreen();
+  });
+
+  describe('when the refresh of the list fails after an action', () => {
+    const NOT_UPDATED = "La liste n'a pas pu être mise à jour. Vérifiez la connexion.";
+    const CARD = 'Ouvrir la battue du samedi 14 novembre';
+
+    /** Cancels a hunt from its screen while the list cannot be loaded, then waits for the failure. */
+    async function cancelWithListUnavailable() {
+      const user = userEvent.setup();
+      const followUp = createInMemoryHuntFollowUp({
+        hunts: [{ ...aHunt({ id: 'hunt1', date: '2026-11-14' }), status: 'invitations_sent' }],
+      });
+      const server = { listAvailable: true };
+      const list = jest.fn(async (): Promise<Hunt[]> => {
+        if (!server.listAvailable) throw new Error('network down');
+        return [await followUp.getHunt('hunt1')];
+      });
+      await renderScreens(
+        { index: HomeScreen, 'hunts/[id]': HuntDetailScreen },
+        { repository: { list, create: () => Promise.reject(new Error('not used')) }, followUp }
+      );
+
+      await user.press(await screen.findByRole('button', { name: CARD }));
+      await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
+      server.listAvailable = false;
+      await user.press(await screen.findByRole('button', { name: 'Oui, annuler la battue' }));
+      expect(
+        await screen.findByText('Battue annulée. Aucun adhérent à prévenir.')
+      ).toBeOnTheScreen();
+      await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+      await act(() => list.mock.results[1].value.catch(() => {}));
+      return { user, server };
+    }
+
+    it('keeps the list, says it is not up to date, and updates it with the retry', async () => {
+      const { user, server } = await cancelWithListUnavailable();
+      await act(() => router.back());
+
+      expect(await screen.findByRole('button', { name: CARD })).toBeOnTheScreen();
+      expect(await screen.findByText(NOT_UPDATED)).toBeOnTheScreen();
+      expect(
+        screen.queryByText('Impossible de charger les battues. Vérifiez la connexion.')
+      ).not.toBeOnTheScreen();
+
+      server.listAvailable = true;
+      await user.press(screen.getByRole('button', { name: 'Réessayer' }));
+
+      expect(await screen.findByRole('button', { name: `${CARD}, annulée` })).toBeOnTheScreen();
+      expect(screen.getByText('Annulée')).toBeOnTheScreen();
+      expect(screen.queryByText(NOT_UPDATED)).not.toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: 'Réessayer' })).not.toBeOnTheScreen();
+    });
+
+    it('updates the list by itself on the way back to the home screen', async () => {
+      const { server } = await cancelWithListUnavailable();
+
+      server.listAvailable = true;
+      await act(() => router.back());
+
+      expect(await screen.findByRole('button', { name: `${CARD}, annulée` })).toBeOnTheScreen();
+      expect(screen.queryByText(NOT_UPDATED)).not.toBeOnTheScreen();
+    });
+
+    it('does not add this message to the error of a first loading', async () => {
+      const repository: HuntRepository = {
+        list: () => Promise.reject(new Error('network down')),
+        create: () => Promise.reject(new Error('not used')),
+      };
+      await renderScreens({ index: HomeScreen }, { repository });
+
+      expect(
+        await screen.findByText('Impossible de charger les battues. Vérifiez la connexion.')
+      ).toBeOnTheScreen();
+      expect(screen.queryByText(NOT_UPDATED)).not.toBeOnTheScreen();
+    });
+  });
+
+  it('leads to the SMS to check, with their number, only when there are some', async () => {
+    const user = userEvent.setup();
+    const reviewItem = (id: string) => ({
+      id,
+      from_phone: '+33639981234',
+      body: 'OUI peut-être',
+      received_at: '2026-11-07T07:00:00.000Z',
+      reason: 'ambiguous' as const,
+      member: null,
+    });
+    await renderScreens(
+      { index: HomeScreen, messages: MessagesStub },
+      {
+        followUp: createInMemoryHuntFollowUp({ reviewItems: [reviewItem('s1'), reviewItem('s2')] }),
+      }
+    );
+
+    await user.press(await screen.findByRole('button', { name: 'Messages à vérifier (2)' }));
+
+    expect(await screen.findByText('Liste des messages')).toBeOnTheScreen();
+    expect(screen).toHavePathname('/messages');
+  });
+
+  it('shows the link when a message to check arrives while the home screen stays open', async () => {
+    jest.useFakeTimers({ now: TODAY, advanceTimers: true });
+    const followUp = createInMemoryHuntFollowUp();
+    await renderScreens({ index: HomeScreen }, { followUp });
+    expect(await screen.findByText('Aucune battue prévue.')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Messages à vérifier/ })).not.toBeOnTheScreen();
+
+    jest.spyOn(followUp, 'listReviewItems').mockResolvedValue([
+      {
+        id: 's1',
+        from_phone: '+33639981234',
+        body: 'OUI',
+        received_at: '2026-11-07T08:00:00.000Z',
+        reason: 'unknown_sender',
+        member: null,
+      },
+    ]);
+    await act(() => jest.advanceTimersByTimeAsync(REVIEW_REFRESH_MS));
+
+    expect(
+      await screen.findByRole('button', { name: 'Messages à vérifier (1)' })
+    ).toBeOnTheScreen();
+  });
+
+  it('shows no link to the SMS to check when there is none', async () => {
+    await renderScreens({ index: HomeScreen }, { hunts: HUNTS });
+
+    expect(await screen.findByRole('heading', { name: 'samedi 14 novembre' })).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Messages à vérifier/ })).not.toBeOnTheScreen();
   });
 
   it('opens the creation form', async () => {

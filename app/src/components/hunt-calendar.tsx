@@ -12,29 +12,41 @@ import { colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
 import { remToPx } from '@/theme/units';
 
 export type HuntCalendarProps = {
-  /** Days that already have a hunt (`yyyy-MM-dd`): marked and not selectable. */
+  /**
+   * Days that already have a hunt (`yyyy-MM-dd`): marked, and not selectable. With
+   * `onSelectHunt`, pressing one calls it instead.
+   */
   huntDates: string[];
+  onSelectHunt?: (date: string) => void;
   selectedDate?: string;
   onSelectDate: (date: string) => void;
   /** Days before this one (`yyyy-MM-dd`) cannot be chosen. */
   minDate?: string;
 };
 
-// Header and day names: the library only accepts raw values, read from the tokens.
-const DAY_WIDTH = remToPx(spacing['touch-min']); // same as the day cells (w-touch-min)
+// Header and day names: the library only accepts raw values, read from the tokens. Everything
+// shares the width of the screen (no fixed width: 7 days must fit a 320 pt wide phone) and the
+// library's margins are removed to keep the calendar short.
 const CALENDAR_THEME = {
   calendarBackground: colors.card.DEFAULT,
-  monthTextColor: colors.primary.DEFAULT,
-  textMonthFontFamily: fontFamily['sans-bold'][0],
-  textMonthFontSize: remToPx(fontSize.xl[0]),
   arrowColor: colors.primary.DEFAULT,
-  // Replaces the library's whole `dayHeader` style, whose 32 px width on a single line cuts
-  // the day names ("m…") in the readable font. Its margins are kept, as spacing tokens.
+  weekVerticalMargin: remToPx(spacing['calendar-week-gap']),
   'stylesheet.calendar.header': {
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    monthText: {
+      margin: 0,
+      fontFamily: fontFamily['sans-bold'][0],
+      fontSize: remToPx(fontSize.lg[0]),
+      color: colors.primary.DEFAULT,
+    },
+    arrow: { padding: 0 },
+    week: { flexDirection: 'row', justifyContent: 'space-around' },
+    // Replaces the library's whole `dayHeader` style, whose 32 px width on a single line cuts
+    // the day names ("m…") in the readable font. Its margins are kept, as spacing tokens.
     dayHeader: {
+      flex: 1,
       marginTop: remToPx(spacing['day-name-top']),
       marginBottom: remToPx(spacing['day-name-bottom']),
-      width: DAY_WIDTH,
       textAlign: 'center',
       fontFamily: fontFamily['sans-bold'][0],
       fontSize: remToPx(fontSize.xs[0]),
@@ -48,9 +60,11 @@ export function HuntCalendar({
   huntDates,
   selectedDate,
   onSelectDate,
+  onSelectHunt,
   minDate,
 }: HuntCalendarProps) {
   const markedDates: Record<string, { marked?: boolean; selected?: boolean }> = {};
+  const huntDays = new Set(huntDates);
   for (const date of huntDates) {
     markedDates[date] = { marked: true };
   }
@@ -66,8 +80,10 @@ export function HuntCalendar({
       minDate={minDate}
       hideExtraDays
       markedDates={markedDates}
-      onDayPress={(day: DateData) => onSelectDate(day.dateString)}
-      dayComponent={DayCell}
+      onDayPress={(day: DateData) =>
+        huntDays.has(day.dateString) ? onSelectHunt?.(day.dateString) : onSelectDate(day.dateString)
+      }
+      dayComponent={onSelectHunt ? OpenableHuntDayCell : DayCell}
       renderArrow={(direction: 'left' | 'right') => (
         <View className="h-touch-min w-touch-min items-center justify-center">
           <Icon as={direction === 'left' ? ChevronLeft : ChevronRight} className="text-primary" />
@@ -80,14 +96,25 @@ export function HuntCalendar({
 
 type DayCellProps = React.ComponentProps<NonNullable<CalendarProps['dayComponent']>>;
 
-function DayCell({ date, state, marking, onPress }: DayCellProps) {
+/** A day cell whose hunt days can be pressed (to open the hunt). */
+function OpenableHuntDayCell(props: DayCellProps) {
+  return <DayCell {...props} huntOpenable />;
+}
+
+function DayCell({
+  date,
+  state,
+  marking,
+  onPress,
+  huntOpenable = false,
+}: DayCellProps & { huntOpenable?: boolean }) {
   if (!date) {
-    return <View className="h-touch-min w-touch-min" />;
+    return <View className="h-touch-min w-full" />;
   }
   const isToday = date.dateString === parisDay(new Date());
   const isHunt = Boolean(marking?.marked);
   const isSelected = Boolean(marking?.selected) && !isHunt;
-  const isDisabled = isHunt || state === 'disabled';
+  const isDisabled = isHunt ? !huntOpenable : state === 'disabled';
 
   const label = [
     `${formatLongDay(date.dateString)} ${date.year}`,
@@ -105,21 +132,25 @@ function DayCell({ date, state, marking, onPress }: DayCellProps) {
       aria-disabled={isDisabled}
       disabled={isDisabled}
       onPress={() => onPress?.(date)}
-      className={cn(
-        'h-touch-min w-touch-min items-center justify-center rounded-full',
-        isToday && 'border-2 border-primary',
-        isHunt && 'bg-accent-light',
-        isSelected && 'bg-primary'
-      )}>
-      <Text
+      className="h-touch-min w-full items-center justify-center">
+      <View
+        testID={`day-mark-${date.dateString}`}
         className={cn(
-          isToday && 'font-sans-bold',
-          isHunt && 'text-foreground',
-          isSelected && 'text-primary-foreground',
-          !isHunt && !isSelected && state === 'disabled' && 'text-muted-foreground'
+          'h-calendar-day w-calendar-day items-center justify-center rounded-full',
+          isToday && 'border-2 border-primary',
+          isHunt && 'bg-accent-light',
+          isSelected && 'bg-primary'
         )}>
-        {date.day}
-      </Text>
+        <Text
+          className={cn(
+            isToday && 'font-sans-bold',
+            isHunt && 'text-foreground',
+            isSelected && 'text-primary-foreground',
+            !isHunt && !isSelected && state === 'disabled' && 'text-muted-foreground'
+          )}>
+          {date.day}
+        </Text>
+      </View>
     </Pressable>
   );
 }
