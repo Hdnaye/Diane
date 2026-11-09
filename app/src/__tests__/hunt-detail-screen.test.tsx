@@ -319,6 +319,30 @@ describe('HuntDetailScreen', () => {
       expect(await screen.findByRole('button', { name: 'Envoyer les invitations' })).toBeEnabled();
     });
 
+    it('stays in progress once the server has marked the hunt as sent, as it does at the start', async () => {
+      const user = userEvent.setup();
+      const followUp = draft();
+      const startSending = followUp.sendInvitations.bind(followUp);
+      jest.spyOn(followUp, 'sendInvitations').mockImplementation(async (huntId) => {
+        await startSending(huntId);
+        return new Promise(() => {});
+      });
+      const { unmount, queryClient } = await openHunt(followUp);
+
+      await user.press(await screen.findByRole('button', { name: 'Envoyer les invitations' }));
+      await user.press(await screen.findByRole('button', { name: 'Envoyer' }));
+      expect(await screen.findByRole('button', { name: 'Envoi en cours' })).toBeDisabled();
+
+      await unmount();
+      await renderScreens(routes, { initialUrl: '/hunts/hunt1', followUp, queryClient });
+
+      expect(await screen.findByText('Invitations envoyées')).toBeOnTheScreen();
+      expect(await screen.findByRole('button', { name: 'Envoi en cours' })).toBeDisabled();
+      expect(
+        screen.getByText('Envoi en cours… Cela peut prendre quelques minutes.')
+      ).toBeOnTheScreen();
+    });
+
     it('resends the failed invitations', async () => {
       const user = userEvent.setup();
       await openHunt(sentHunt());
@@ -406,6 +430,22 @@ describe('HuntDetailScreen', () => {
 
       expect(await screen.findByLabelText('Absents : 2')).toBeOnTheScreen();
       expect(screen.getByLabelText('Sans réponse : 0')).toBeOnTheScreen();
+    });
+
+    it('refreshes the status of the hunt regularly: the answer of a sending may never come', async () => {
+      jest.useFakeTimers({ now: TODAY, advanceTimers: true });
+      const followUp = createInMemoryHuntFollowUp({
+        hunts: [aHuntDetail()],
+        members: [JEANNE],
+      });
+      await openHunt(followUp);
+      expect(await screen.findByText('Brouillon')).toBeOnTheScreen();
+
+      await followUp.sendInvitations('hunt1');
+      await act(() => jest.advanceTimersByTimeAsync(ATTENDANCE_REFRESH_MS));
+
+      expect(await screen.findByText('Invitations envoyées')).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: 'Envoyer les invitations' })).not.toBeOnTheScreen();
     });
 
     it('refreshes the answers when pulled down', async () => {
