@@ -376,11 +376,10 @@ describe('HuntDetailScreen', () => {
 
     it('stays in progress once the server has marked the hunt as sent, as it does at the start', async () => {
       const user = userEvent.setup();
-      const followUp = draft();
-      const startSending = followUp.sendInvitations.bind(followUp);
-      jest.spyOn(followUp, 'sendInvitations').mockImplementation(async (huntId) => {
-        await startSending(huntId);
-        return new Promise(() => {});
+      const followUp = createInMemoryHuntFollowUp({
+        hunts: [aHuntDetail()],
+        members: [JEANNE, PAUL, MARC],
+        sendingHeldUntil: new Promise(() => {}),
       });
       const { unmount, queryClient } = await openHunt(followUp);
 
