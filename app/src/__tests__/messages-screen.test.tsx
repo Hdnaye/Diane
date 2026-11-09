@@ -61,7 +61,7 @@ describe('MessagesScreen', () => {
     await openMessages(createInMemoryHuntFollowUp({ reviewItems: [FROM_UNKNOWN, FROM_JEANNE] }));
 
     expect(await screen.findByRole('heading', { name: 'Messages à vérifier' })).toBeOnTheScreen();
-    const senders = screen.getAllByLabelText(/^Message de /);
+    const senders = await screen.findAllByLabelText(/^Message de /);
     expect(senders.map((card) => card.props['aria-label'])).toEqual([
       'Message de Jeanne Fictive',
       'Message de 06 39 98 56 78',
