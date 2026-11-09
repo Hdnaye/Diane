@@ -8,6 +8,7 @@ import {
   FeatureUnavailableError,
   HuntActionError,
   type HuntDetail,
+  type CancelSummary,
   type HuntFollowUpRepository,
   type SendSummary,
 } from '@/data/hunt-follow-up';
@@ -127,6 +128,22 @@ describe('HuntDetailScreen', () => {
 
       expect(await screen.findByText('Sans limite de places')).toBeOnTheScreen();
       expect(screen.getByText("Date limite fixée à l'envoi des invitations")).toBeOnTheScreen();
+    });
+
+    it('says when the hunt cannot be loaded and lets the organizer retry', async () => {
+      const user = userEvent.setup();
+      const followUp = createInMemoryHuntFollowUp({ hunts: [aHuntDetail()] });
+      jest.spyOn(followUp, 'getHunt').mockRejectedValueOnce(new Error('network down'));
+      await openHunt(followUp);
+
+      expect(
+        await screen.findByText('Impossible de charger la battue. Vérifiez la connexion.')
+      ).toBeOnTheScreen();
+      await user.press(screen.getByRole('button', { name: 'Réessayer' }));
+
+      expect(
+        await screen.findByRole('heading', { name: 'Battue du samedi 14 novembre' })
+      ).toBeOnTheScreen();
     });
 
     it('says when the hunt does not exist', async () => {
@@ -381,6 +398,67 @@ describe('HuntDetailScreen', () => {
       ).toBeOnTheScreen();
     });
 
+    it('asks to add members before sending when there is no active member', async () => {
+      const user = userEvent.setup();
+      const followUp = createInMemoryHuntFollowUp({ hunts: [aHuntDetail()] });
+      const send = jest.spyOn(followUp, 'sendInvitations');
+      await openHunt(followUp);
+      await user.press(await screen.findByRole('button', { name: 'Envoyer les invitations' }));
+
+      expect(
+        await screen.findByText(
+          "Aucun adhérent actif : ajoutez des adhérents avant d'envoyer les invitations."
+        )
+      ).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: 'Envoyer' })).not.toBeOnTheScreen();
+      await user.press(screen.getByRole('button', { name: 'Fermer' }));
+
+      expect(await screen.findByRole('button', { name: 'Envoyer les invitations' })).toBeEnabled();
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it('says the failed invitations are being resent, and does not resend them twice', async () => {
+      const user = userEvent.setup();
+      const followUp = sentHunt();
+      let finish: (summary: SendSummary) => void = () => {};
+      const resend = jest
+        .spyOn(followUp, 'resendFailed')
+        .mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+      await openHunt(followUp);
+
+      await user.press(await screen.findByRole('button', { name: 'Renvoyer les échecs' }));
+
+      const resending = await screen.findByRole('button', { name: 'Renvoi en cours' });
+      expect(resending).toBeDisabled();
+      await user.press(resending);
+      expect(resend).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: 'Annuler la battue' })).toBeDisabled();
+
+      await act(async () =>
+        finish({
+          invited: 0,
+          sms: { sent: 0, failed: 0, skipped: 0 },
+          email: { sent: 0, failed: 0, skipped: 0 },
+        })
+      );
+      expect(await screen.findByText('Aucun échec à renvoyer.')).toBeOnTheScreen();
+    });
+
+    it('says when the failed invitations cannot be resent', async () => {
+      const user = userEvent.setup();
+      const followUp = sentHunt();
+      jest
+        .spyOn(followUp, 'resendFailed')
+        .mockRejectedValue(new ClientResponseError({ status: 500 }));
+      await openHunt(followUp);
+
+      await user.press(await screen.findByRole('button', { name: 'Renvoyer les échecs' }));
+
+      expect(
+        await screen.findByText("L'envoi n'a pas pu se faire. Réessayez dans un moment.")
+      ).toBeOnTheScreen();
+    });
+
     it('resends the failed invitations', async () => {
       const user = userEvent.setup();
       await openHunt(sentHunt());
@@ -462,6 +540,58 @@ describe('HuntDetailScreen', () => {
       expect(group('Absents').getByText('Lucie Démo')).toBeOnTheScreen();
       expect(group('Sans réponse').getByText('Henri Test')).toBeOnTheScreen();
     });
+
+    it('says when the answers cannot be loaded', async () => {
+      const followUp = sentHunt();
+      jest.spyOn(followUp, 'listInvitations').mockRejectedValue(new Error('network down'));
+      await openHunt(followUp);
+
+      expect(
+        await screen.findByText(
+          'Impossible de charger les réponses. Tirez vers le bas pour réessayer.'
+        )
+      ).toBeOnTheScreen();
+    });
+
+    it('does not name a member deleted meanwhile', async () => {
+      await openHunt(
+        createInMemoryHuntFollowUp({
+          hunts: [aHuntDetail({ status: 'invitations_sent' })],
+          invitations: [{ id: 'i1', huntId: 'hunt1', member: { id: 'm9', name: '' } }],
+        })
+      );
+
+      expect(await screen.findByText('Adhérent supprimé')).toBeOnTheScreen();
+    });
+
+    it.each([
+      ['failed', '2026-11-08T09:00:00.000Z', 'E-mail non envoyé'],
+      ['not_sent', '2026-11-08T09:00:00.000Z', 'E-mail pas encore envoyé'],
+      ['sending', '2026-11-08T09:00:00.000Z', "E-mail en cours d'envoi"],
+      ['sending', '2026-11-08T08:50:00.000Z', 'E-mail à renvoyer'],
+    ] as const)(
+      'shows the e-mail channel %s (updated %s)',
+      async (email_status, updated, label) => {
+        await openHunt(
+          createInMemoryHuntFollowUp({
+            hunts: [aHuntDetail({ status: 'invitations_sent' })],
+            members: [HENRI],
+            invitations: [
+              {
+                id: 'i5',
+                huntId: 'hunt1',
+                member: HENRI,
+                email_status,
+                sms_status: 'sent',
+                updated,
+              },
+            ],
+          })
+        );
+
+        expect(await screen.findByText(label)).toBeOnTheScreen();
+      }
+    );
 
     it('refreshes the answers regularly', async () => {
       jest.useFakeTimers({ now: TODAY, advanceTimers: true });
@@ -562,7 +692,54 @@ describe('HuntDetailScreen', () => {
     });
   });
 
+  describe('answers entered by the organizer, when they cannot be saved', () => {
+    it('says so and leaves the answer as it was', async () => {
+      const user = userEvent.setup();
+      const followUp = sentHunt();
+      jest.spyOn(followUp, 'setParticipation').mockRejectedValue(new Error('network down'));
+      await openHunt(followUp);
+
+      await user.press(await screen.findByRole('button', { name: 'Marquer absent : Henri Test' }));
+
+      expect(
+        await screen.findByText(
+          "La réponse n'a pas pu être enregistrée. Vérifiez la connexion, puis réessayez."
+        )
+      ).toBeOnTheScreen();
+      expect(screen.getByLabelText('Sans réponse : 1')).toBeOnTheScreen();
+    });
+  });
+
   describe('cancellation', () => {
+    it('says the cancellation is in progress and does not cancel twice', async () => {
+      const user = userEvent.setup();
+      const followUp = sentHunt();
+      let finish: (summary: CancelSummary) => void = () => {};
+      const cancel = jest
+        .spyOn(followUp, 'cancelHunt')
+        .mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+      await openHunt(followUp);
+
+      await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
+      await user.press(await screen.findByRole('button', { name: 'Oui, annuler la battue' }));
+
+      const cancelling = await screen.findByRole('button', { name: 'Annulation en cours' });
+      expect(cancelling).toBeDisabled();
+      await user.press(cancelling);
+      expect(cancel).toHaveBeenCalledTimes(1);
+
+      await act(async () =>
+        finish({
+          notified: 0,
+          sms: { sent: 0, failed: 0, skipped: 0 },
+          email: { sent: 0, failed: 0, skipped: 0 },
+        })
+      );
+      expect(
+        await screen.findByText('Battue annulée. Aucun adhérent à prévenir.')
+      ).toBeOnTheScreen();
+    });
+
     it('asks for a strong confirmation, cancels, then shows a summary', async () => {
       const user = userEvent.setup();
       await openHunt(sentHunt());

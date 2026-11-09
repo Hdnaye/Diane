@@ -85,6 +85,70 @@ describe('MessagesScreen', () => {
     expect(await screen.findByText('Aucun message à vérifier.')).toBeOnTheScreen();
   });
 
+  it('says when the messages cannot be loaded and lets the organizer retry', async () => {
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({ reviewItems: [FROM_UNKNOWN] });
+    jest.spyOn(followUp, 'listReviewItems').mockRejectedValueOnce(new Error('network down'));
+    await openMessages(followUp);
+
+    expect(
+      await screen.findByText('Impossible de charger les messages. Vérifiez la connexion.')
+    ).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Réessayer' }));
+
+    expect(await screen.findByLabelText('Message de 06 39 98 56 78')).toBeOnTheScreen();
+  });
+
+  it('says when a message cannot be marked as handled, and keeps it', async () => {
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({ reviewItems: [FROM_UNKNOWN] });
+    jest.spyOn(followUp, 'resolveReviewItem').mockRejectedValue(new Error('network down'));
+    await openMessages(followUp);
+
+    await user.press(
+      await screen.findByRole('button', { name: 'Marquer comme traité : 06 39 98 56 78' })
+    );
+
+    expect(
+      await screen.findByText(
+        "Le message n'a pas pu être marqué comme traité. Vérifiez la connexion."
+      )
+    ).toBeOnTheScreen();
+    expect(screen.getByLabelText('Message de 06 39 98 56 78')).toBeOnTheScreen();
+  });
+
+  it('says when an answer cannot be applied, and keeps the message', async () => {
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({
+      hunts: [hunt('hunt1', '2026-11-14')],
+      members: [JEANNE],
+      invitations: [{ id: 'i1', huntId: 'hunt1', member: JEANNE }],
+      reviewItems: [FROM_JEANNE],
+    });
+    jest.spyOn(followUp, 'applyAnswer').mockRejectedValue(new Error('network down'));
+    await openMessages(followUp);
+
+    await user.press(await screen.findByRole('button', { name: 'Appliquer OUI : Jeanne Fictive' }));
+
+    expect(
+      await screen.findByText(
+        "La réponse n'a pas pu être appliquée. Vérifiez la connexion, puis réessayez."
+      )
+    ).toBeOnTheScreen();
+    expect(screen.getByLabelText('Message de Jeanne Fictive')).toBeOnTheScreen();
+  });
+
+  it("says when the member's hunts cannot be loaded", async () => {
+    const followUp = createInMemoryHuntFollowUp({ members: [JEANNE], reviewItems: [FROM_JEANNE] });
+    jest.spyOn(followUp, 'listOpenInvitations').mockRejectedValue(new Error('network down'));
+    await openMessages(followUp);
+
+    expect(
+      await screen.findByText('Impossible de charger les battues de cet adhérent.')
+    ).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Appliquer/ })).not.toBeOnTheScreen();
+  });
+
   it('marks a message as handled', async () => {
     const user = userEvent.setup();
     await openMessages(createInMemoryHuntFollowUp({ reviewItems: [FROM_UNKNOWN, FROM_JEANNE] }));
