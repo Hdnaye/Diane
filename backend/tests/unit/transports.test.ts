@@ -464,8 +464,75 @@ describe("deliver", () => {
         'Post "http://192.168.1.50:8080/messages": context deadline exceeded (Client.Timeout exceeded while awaiting headers)',
       );
     };
-    // The next SMS of the sending are not attempted (gateway unreachable).
+    // The quick check fails too (phone off): the next SMS of the sending
+    // are not attempted (gateway unreachable).
     expect(kindOf(timeout)).toStrictEqual(["failed", "not_attempted"]);
+  });
+
+  /** HTTP requests sent while delivering 3 SMS through `httpSend`. */
+  const callsFor = (
+    httpSend: (request: { url: string; method: string }) => {
+      statusCode: number;
+    },
+  ) => {
+    const requests: { url: string; method: string; timeout: number }[] = [];
+    const transports = createTransports(
+      gatewayConfig(),
+      fakeIo({
+        httpSend: (request: unknown) => {
+          const typed = request as { url: string; method: string };
+          requests.push(request as (typeof requests)[number]);
+          return httpSend(typed);
+        },
+      }).io,
+    );
+    const kinds = ["+33639981000", "+33639981001", "+33639981002"].map(
+      (to) => deliver(transports.sms, { to, text: "x" }).kind,
+    );
+    return { kinds, requests };
+  };
+
+  it("goes on after a timeout when a quick check shows the phone reachable (slow phone)", () => {
+    const { kinds, requests } = callsFor((request) => {
+      if (request.method === "GET") return { statusCode: 404 };
+      throw new Error('Post "x": context deadline exceeded');
+    });
+
+    // Every SMS attempted (the id protects from duplicates).
+    expect(kinds).toStrictEqual(["failed", "failed", "failed"]);
+    const checks = requests.filter((request) => request.method === "GET");
+    expect(checks).toHaveLength(3);
+    expect(checks[0]).toMatchObject({
+      url: "http://192.168.1.50:8080/health",
+      timeout: 2,
+    });
+  });
+
+  it("cuts the sending on a connection error, without quick check", () => {
+    for (const message of [
+      'Post "x": dial tcp 192.168.1.50:8080: connect: connection refused',
+      'Post "x": dial tcp: lookup gateway.invalid: no such host',
+      'Post "x": read tcp 1.2.3.4:5->6.7.8.9:80: read: connection reset by peer',
+    ]) {
+      const { kinds, requests } = callsFor(() => {
+        throw new Error(message);
+      });
+
+      expect(kinds).toStrictEqual(["failed", "not_attempted", "not_attempted"]);
+      expect(requests).toHaveLength(1);
+    }
+  });
+
+  it("cuts the sending when the quick check fails too (phone off: same error as slow)", () => {
+    const { kinds, requests } = callsFor(() => {
+      throw new Error('Post "x": context deadline exceeded');
+    });
+
+    expect(kinds).toStrictEqual(["failed", "not_attempted", "not_attempted"]);
+    expect(requests.map((request) => request.method)).toStrictEqual([
+      "POST",
+      "GET",
+    ]);
   });
 
   it("reports a duplicate rejected by the gateway (409) as sent", () => {
