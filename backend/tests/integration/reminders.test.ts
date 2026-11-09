@@ -14,6 +14,8 @@ import {
 
 const nextPhone = phoneNumbers(52);
 const HOUR = 60 * 60 * 1000;
+/** A cron schedule that never fires (February 31st). */
+const NEVER = "0 0 31 2 *";
 
 type ApiRecord = Record<string, string> & {
   id: string;
@@ -243,6 +245,9 @@ describe("automatic retries against a real (fake) gateway", () => {
         DIANE_SMS_GATEWAY_URL: gateway.url,
         DIANE_SMS_GATEWAY_USERNAME: "sms",
         DIANE_SMS_GATEWAY_PASSWORD: randomBytes(16).toString("hex"),
+        // Runs triggered by the tests only: a scheduled run in the middle
+        // of a test (every 10 minutes of the clock) would retry too early.
+        DIANE_REMINDER_SCHEDULE: NEVER,
       },
     });
   });
@@ -265,6 +270,15 @@ describe("automatic retries against a real (fake) gateway", () => {
     }
     return response.body as ApiRecord;
   }
+
+  it("takes its schedule from DIANE_REMINDER_SCHEDULE", async () => {
+    const response = await pb.api("/api/crons", { token: pb.superuserToken });
+
+    expect(response.body).toContainEqual({
+      id: "dianeReminders",
+      expression: NEVER,
+    });
+  });
 
   /** A hunt due for its reminder with `count` pending members (no e-mail). */
   async function dueHunt(count: number) {
