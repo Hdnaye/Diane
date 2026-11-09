@@ -1,10 +1,11 @@
-import { userEvent } from '@testing-library/react-native';
+import { act, userEvent } from '@testing-library/react-native';
 import { screen } from 'expo-router/testing-library';
 import { Text } from 'react-native';
 
 import HomeScreen from '@/app/index';
 import NewHuntScreen from '@/app/hunts/new';
 import { createInMemoryHuntFollowUp } from '@/data/hunt-follow-up';
+import { REVIEW_REFRESH_MS } from '@/data/hunt-follow-up-queries';
 import type { HuntRepository } from '@/data/hunt-repository';
 import { ServerConfigMissingError, type ServerConnection } from '@/data/server-connection';
 import type { Hunt } from '@/data/types';
@@ -147,6 +148,30 @@ describe('HomeScreen', () => {
 
     expect(await screen.findByText('Liste des messages')).toBeOnTheScreen();
     expect(screen).toHavePathname('/messages');
+  });
+
+  it('shows the link when a message to check arrives while the home screen stays open', async () => {
+    jest.useFakeTimers({ now: TODAY, advanceTimers: true });
+    const followUp = createInMemoryHuntFollowUp();
+    await renderScreens({ index: HomeScreen }, { followUp });
+    expect(await screen.findByText('Aucune battue prévue.')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: /^Messages à vérifier/ })).not.toBeOnTheScreen();
+
+    jest.spyOn(followUp, 'listReviewItems').mockResolvedValue([
+      {
+        id: 's1',
+        from_phone: '+33639981234',
+        body: 'OUI',
+        received_at: '2026-11-07T08:00:00.000Z',
+        reason: 'unknown_sender',
+        member: null,
+      },
+    ]);
+    await act(() => jest.advanceTimersByTimeAsync(REVIEW_REFRESH_MS));
+
+    expect(
+      await screen.findByRole('button', { name: 'Messages à vérifier (1)' })
+    ).toBeOnTheScreen();
   });
 
   it('shows no link to the SMS to check when there is none', async () => {
