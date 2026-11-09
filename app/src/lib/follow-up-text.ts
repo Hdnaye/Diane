@@ -12,9 +12,11 @@ export function plural(count: number, singular: string, pluralForm: string): str
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
+/** `sent` for an SMS: queued on the gateway phone (2xx), which says nothing about its delivery. */
 function channelParts(sms: ChannelSummary, email: ChannelSummary): string[] {
   return [
-    sms.sent && plural(sms.sent, 'SMS envoyé', 'SMS envoyés'),
+    sms.sent &&
+      plural(sms.sent, "SMS transmis au téléphone d'envoi", "SMS transmis au téléphone d'envoi"),
     sms.failed && plural(sms.failed, 'SMS non envoyé', 'SMS non envoyés'),
     sms.not_sent && plural(sms.not_sent, 'SMS pas encore envoyé', 'SMS pas encore envoyés'),
     email.sent && plural(email.sent, 'e-mail envoyé', 'e-mails envoyés'),
@@ -40,7 +42,7 @@ export function formatSendSummary({ invited, sms, email }: SendSummary): string 
   return invited === 0
     ? 'Aucun nouvel adhérent à inviter.'
     : withResendHint(
-        withParts(plural(invited, 'adhérent invité', 'adhérents invités'), sms, email),
+        withParts(plural(invited, 'invitation créée', 'invitations créées'), sms, email),
         sms
       );
 }
@@ -49,7 +51,7 @@ export function formatResendSummary({ invited, sms, email }: SendSummary): strin
   return invited === 0
     ? 'Aucun échec à renvoyer.'
     : withResendHint(
-        withParts(plural(invited, 'invitation renvoyée', 'invitations renvoyées'), sms, email),
+        withParts(plural(invited, 'invitation reprise', 'invitations reprises'), sms, email),
         sms
       );
 }
@@ -65,17 +67,14 @@ export function formatCancelSummary({ notified, sms, email }: CancelSummary): st
     return 'Battue annulée. Aucun adhérent à prévenir.';
   }
   const [smsNotices, emailNotices] = [notDelivered(sms), notDelivered(email)];
+  const summary = withParts(
+    `Battue annulée. ${plural(notified, 'adhérent concerné', 'adhérents concernés')}`,
+    smsNotices,
+    emailNotices
+  );
   return smsNotices.failed || emailNotices.failed
-    ? `${withParts(
-        `Battue annulée. ${plural(notified, 'adhérent concerné', 'adhérents concernés')}`,
-        smsNotices,
-        emailNotices
-      )} Prévenez directement ceux qui n'ont rien reçu.`
-    : withParts(
-        `Battue annulée. ${plural(notified, 'adhérent prévenu', 'adhérents prévenus')}`,
-        sms,
-        email
-      );
+    ? `${summary} Prévenez directement ceux qui n'ont rien reçu.`
+    : summary;
 }
 
 /** Reasons given by the server for a refused sending (`data.hunt.code`). */
