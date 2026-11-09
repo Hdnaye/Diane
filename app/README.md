@@ -117,6 +117,14 @@ npm run format:check
   (`src/lib/member-form.ts`) vérifie tout en une fois ; les refus du back (numéro invalide,
   doublon de téléphone ou d'e-mail, aucun contact) deviennent des messages français sous les
   champs (`src/lib/member-messages.ts`). Aucune donnée d'adhérent n'est journalisée.
+- Envoi des invitations (`src/app/hunts/[id].tsx`, `src/data/hunt-follow-up-queries.ts`) : la
+  requête dure tout le temps de l'envoi (plusieurs minutes si le téléphone passerelle est lent).
+  « Envoi en cours » vient du cache de mutations (`useIsSending`) et reste affiché à la réouverture
+  de l'écran, même si le back a déjà passé la battue en `invitations_sent` (il le fait au début
+  de l'envoi). L'app ne fixe aucun délai, mais iOS peut couper la requête après une minute sans
+  réponse : le back continue alors, et l'état par canal, rafraîchi toutes les 15 s, fait foi.
+  `not_sent` (passerelle injoignable) et un `sending` sans nouvelles depuis 10 min
+  (`STALE_SENDING_MS` du back) ne repartent que par « Renvoyer les échecs ».
 - Calendrier : `HuntCalendar` (react-native-calendars, 100 % JS), locale française construite
   avec date-fns, semaine commençant le lundi ; jours rendus par un composant à classes NativeWind
   (aujourd'hui cerclé, battue en `accent-light`, sélection en `primary`).
