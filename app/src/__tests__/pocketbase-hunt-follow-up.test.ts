@@ -403,6 +403,7 @@ describe('PocketBase hunt follow-up', () => {
     expect(sent).toContain('member="member1"');
     expect(sent).toContain('hunt.date>="2026-11-08"');
     expect(sent).toContain('hunt.status!="cancelled"');
+    expect(sent).toContain('hunt.status!="closed"');
     expect(sent).toContain('expand=hunt');
     expect(sent).toContain('sort=hunt.date');
   });

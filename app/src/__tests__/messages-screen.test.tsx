@@ -270,6 +270,21 @@ describe('MessagesScreen', () => {
     expect((await followUp.listInvitations('hunt1'))[0].participation).toBe('pending');
   });
 
+  it('does not offer a closed hunt, whose answers the server refuses', async () => {
+    await openMessages(
+      createInMemoryHuntFollowUp({
+        hunts: [{ ...hunt('hunt1', '2026-11-14'), status: 'closed' }],
+        members: [JEANNE],
+        invitations: [{ id: 'i1', huntId: 'hunt1', member: JEANNE }],
+        reviewItems: [FROM_JEANNE],
+      })
+    );
+
+    expect(
+      await screen.findByText('Pas de battue ouverte à laquelle appliquer la réponse.')
+    ).toBeOnTheScreen();
+  });
+
   it('says when the member has no open invitation', async () => {
     await openMessages(
       createInMemoryHuntFollowUp({ members: [JEANNE, PAUL], reviewItems: [FROM_JEANNE] })
