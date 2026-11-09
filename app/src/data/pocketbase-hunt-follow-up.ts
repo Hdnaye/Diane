@@ -161,7 +161,7 @@ export function createPocketBaseHuntFollowUp(
       const records = await session.run(() =>
         invitations().getFullList<InvitationWithHunt>({
           filter: pb.filter(
-            'member = {:member} && hunt.date >= {:today} && hunt.status != "cancelled"',
+            'member = {:member} && hunt.date >= {:today} && hunt.status != "cancelled" && hunt.status != "closed"',
             { member: memberId, today }
           ),
           expand: 'hunt',

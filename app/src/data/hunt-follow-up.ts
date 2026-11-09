@@ -91,7 +91,7 @@ export type ReviewItem = Pick<
   member: Pick<MembersResponse, 'id' | 'name'> | null;
 };
 
-/** An invitation of a member to a hunt still open (not cancelled, not past). */
+/** An invitation of a member to a hunt still open (not cancelled or closed, not past). */
 export type OpenInvitation = { id: string; huntId: string; huntDate: string };
 
 export type ManualParticipation = Exclude<Participation, 'pending'>;
@@ -121,7 +121,7 @@ export interface HuntFollowUpRepository {
   /** Unresolved SMS to check, newest first. */
   listReviewItems(): Promise<ReviewItem[]>;
   resolveReviewItem(id: string): Promise<void>;
-  /** Invitations of a member to hunts not cancelled, from `today` (`yyyy-MM-dd`), by day. */
+  /** Invitations of a member to hunts not cancelled or closed, from `today` (`yyyy-MM-dd`), by day. */
   listOpenInvitations(memberId: string, today: string): Promise<OpenInvitation[]>;
 }
 
@@ -340,7 +340,10 @@ export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
       return invitations
         .filter((item) => item.member.id === memberId)
         .map((item) => ({ item, target: hunt(item.huntId) }))
-        .filter(({ target }) => target.status !== 'cancelled' && target.date >= today)
+        .filter(
+          ({ target }) =>
+            target.status !== 'cancelled' && target.status !== 'closed' && target.date >= today
+        )
         .sort((a, b) => a.target.date.localeCompare(b.target.date))
         .map(({ item, target }) => ({ id: item.id, huntId: target.id, huntDate: target.date }));
     },
