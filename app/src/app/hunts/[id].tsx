@@ -249,16 +249,20 @@ export default function HuntDetailScreen() {
         </Text>
       </View>
 
+      {/* The server marks the hunt as sent at the start of the sending: not only for a draft. */}
+      {sending && (
+        <View className="gap-3">
+          <Button size="lg" disabled aria-label="Envoi en cours">
+            <ActivityIndicator className="text-muted-foreground" />
+            <Text>Envoi en cours</Text>
+          </Button>
+          <Text aria-live="polite">Envoi en cours… Cela peut prendre quelques minutes.</Text>
+        </View>
+      )}
+
       {hunt.status === 'draft' &&
-        (sending ? (
-          <View className="gap-3">
-            <Button size="lg" disabled aria-label="Envoi en cours">
-              <ActivityIndicator className="text-muted-foreground" />
-              <Text>Envoi en cours</Text>
-            </Button>
-            <Text aria-live="polite">Envoi en cours… Cela peut prendre quelques minutes.</Text>
-          </View>
-        ) : confirmation?.kind === 'send' ? (
+        !sending &&
+        (confirmation?.kind === 'send' ? (
           count === 0 ? (
             <ConfirmPanel
               message="Aucun adhérent actif : ajoutez des adhérents avant d'envoyer les invitations."

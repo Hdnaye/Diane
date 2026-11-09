@@ -5,7 +5,7 @@ import type { ManualParticipation } from '@/data/hunt-follow-up';
 import { huntKeys, useServerConnection } from '@/data/hunt-queries';
 import { useHuntFollowUpRepository } from '@/data/hunt-repository-context';
 
-/** The answers of a hunt are refreshed this often while its screen is shown. */
+/** A hunt and its answers are refreshed this often while its screen is shown. */
 export const ATTENDANCE_REFRESH_MS = 15_000;
 
 export const followUpKeys = {
@@ -17,13 +17,16 @@ export const followUpKeys = {
   sending: (id: string) => ['send-invitations', id] as const,
 };
 
+/** A hunt, refreshed while its screen is focused: the answer of a sending may never come. */
 export function useHuntDetail(id: string) {
   const followUp = useHuntFollowUpRepository();
   const connection = useServerConnection();
+  const focused = useIsFocused();
   return useQuery({
     queryKey: followUpKeys.hunt(id),
     queryFn: () => followUp.getHunt(id),
     enabled: connection.isSuccess,
+    refetchInterval: focused ? ATTENDANCE_REFRESH_MS : false,
   });
 }
 
