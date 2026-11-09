@@ -342,14 +342,16 @@ describe("automatic retries against a real (fake) gateway", () => {
     // The phone takes each SMS, but answers after the 5 s timeout.
     gateway.delayAnswers(6000);
     try {
-      for (let run = 0; run < 2; run++) await runAndSettle(invitations);
+      await runAndSettle(invitations);
     } finally {
       gateway.delayAnswers(0);
     }
-    // Each tried once (timed out), the other one cut off on each run.
-    expect(
-      (await statuses(invitations)).map((item) => item.attempts),
-    ).toStrictEqual([1, 1]);
+    // Both timed out in the same run: the phone answers the quick check,
+    // so the run goes on (slow phone, not switched off).
+    expect(await statuses(invitations)).toStrictEqual(
+      Array(2).fill({ status: "failed", attempts: 1 }),
+    );
+    expect(members.map(acceptedTo)).toStrictEqual([1, 1]);
 
     await runAndSettle(invitations);
 
