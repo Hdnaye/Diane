@@ -118,6 +118,9 @@ function base64(text) {
  * @typedef {object} SmsMessage
  * @property {string} to   E.164 phone number, "" when none.
  * @property {string} text
+ * @property {string} [id] Message id given to the gateway, deterministic
+ *   per logical message (e.g. "rem-<invitation id>"): the gateway rejects
+ *   an id it already took (409), so a resent message is never sent twice.
  */
 
 /**
@@ -141,10 +144,15 @@ function gatewayRequest(config, message) {
       "Content-Type": "application/json",
       Authorization: `Basic ${base64(`${config.username}:${config.password}`)}`,
     },
-    body: JSON.stringify({
-      textMessage: { text: message.text },
-      phoneNumbers: [message.to],
-    }),
+    body: JSON.stringify(
+      message.id
+        ? {
+            id: message.id,
+            textMessage: { text: message.text },
+            phoneNumbers: [message.to],
+          }
+        : { textMessage: { text: message.text }, phoneNumbers: [message.to] },
+    ),
     timeout: GATEWAY_TIMEOUT_S,
   };
 }
@@ -161,8 +169,27 @@ function gatewayRequest(config, message) {
 
 /**
  * @template M
- * @typedef {{ send: (message: M) => void }} Transport Throws on failure.
+ * @typedef {{ send: (message: M) => void }} Transport Throws on failure,
+ *   an Error whose `kind` property is a FailureKind.
  */
+
+/**
+ * @typedef {"failed" | "not_attempted"} FailureKind
+ * - failed: attempted and failed (connection refused, timeout, HTTP error,
+ *   SMTP error), or not configured. After a timeout the phone may have
+ *   taken the SMS: resending it is safe thanks to its id (duplicate
+ *   rejected by the gateway, see SmsMessage);
+ * - not_attempted: not tried, the gateway was already found unreachable
+ *   during this sending (status `not_sent`).
+ */
+
+/**
+ * @param {string} message Without personal data.
+ * @param {FailureKind} kind
+ */
+function failure(message, kind) {
+  return Object.assign(new Error(message), { kind });
+}
 
 /**
  * @param {TransportConfig} config
@@ -175,7 +202,7 @@ function createTransports(config, io) {
     /** @param {SmsMessage | EmailMessage} message */
     send(message) {
       if (!config.outboxDir) {
-        throw new Error("Fake transport without outbox directory.");
+        throw failure("Fake transport without outbox directory.", "failed");
       }
       io.record(kind, message);
     },
@@ -192,21 +219,31 @@ function createTransports(config, io) {
     send(message) {
       const { url, username, password } = config.sms;
       if (!url || !username || !password) {
-        throw new Error("SMS gateway not configured.");
+        throw failure("SMS gateway not configured.", "failed");
       }
       if (unreachable) {
-        throw new Error("SMS gateway unreachable (not retried).");
+        throw failure(
+          "SMS gateway unreachable (not retried).",
+          "not_attempted",
+        );
       }
       let response;
       try {
         response = io.httpSend(gatewayRequest(config.sms, message));
       } catch {
         unreachable = true;
-        // The cause may quote the request: not repeated.
-        throw new Error("SMS gateway unreachable.");
+        // The cause may quote the request: not repeated. A timeout may
+        // hide an SMS taken by a slow phone: resending it is safe (its id).
+        throw failure("SMS gateway unreachable.", "failed");
       }
+      // Duplicate id: the gateway already took this message (an earlier
+      // attempt answered too late): sent.
+      if (response.statusCode === 409 && message.id) return;
       if (response.statusCode < 200 || response.statusCode > 299) {
-        throw new Error(`SMS gateway answered HTTP ${response.statusCode}.`);
+        throw failure(
+          `SMS gateway answered HTTP ${response.statusCode}.`,
+          "failed",
+        );
       }
     },
   };
@@ -214,9 +251,9 @@ function createTransports(config, io) {
   /** @type {Transport<EmailMessage>} */
   const smtp = {
     send(message) {
-      if (!io.smtpEnabled) throw new Error("SMTP not configured.");
+      if (!io.smtpEnabled) throw failure("SMTP not configured.", "failed");
       const address = config.email.senderAddress || io.defaultSender.address;
-      if (!address) throw new Error("No e-mail sender address.");
+      if (!address) throw failure("No e-mail sender address.", "failed");
       const name = config.email.senderAddress
         ? config.email.senderName
         : io.defaultSender.name;
@@ -229,7 +266,7 @@ function createTransports(config, io) {
         });
       } catch {
         // SMTP errors may quote the recipient: not repeated.
-        throw new Error("SMTP sending failed.");
+        throw failure("SMTP sending failed.", "failed");
       }
     },
   };
@@ -246,18 +283,22 @@ function createTransports(config, io) {
  * @template {{ to: string }} M
  * @param {Transport<M>} transport
  * @param {M} message
- * @returns {{ status: "sent" | "failed" | "skipped", error: string }}
- *   error: reason of a failure, without personal data.
+ * @returns {{ status: "sent" | "failed" | "skipped" | "not_sent", error: string, kind: FailureKind | "" }}
+ *   status `not_sent`: not attempted (gateway already unreachable); error:
+ *   reason of a failure, without personal data; kind: "" unless failed.
  */
 function deliver(transport, message) {
-  if (!message.to) return { status: "skipped", error: "" };
+  if (!message.to) return { status: "skipped", error: "", kind: "" };
   try {
     transport.send(message);
-    return { status: "sent", error: "" };
+    return { status: "sent", error: "", kind: "" };
   } catch (error) {
+    const notAttempted =
+      /** @type {{ kind?: unknown }} */ (error).kind === "not_attempted";
     return {
-      status: "failed",
+      status: notAttempted ? "not_sent" : "failed",
       error: error instanceof Error ? error.message : "Sending failed.",
+      kind: notAttempted ? "not_attempted" : "failed",
     };
   }
 }

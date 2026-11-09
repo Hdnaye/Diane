@@ -10,6 +10,7 @@ import { useEffect } from 'react';
 
 import { appBackend } from '@/data/app-backend';
 import { HuntRepositoryProvider } from '@/data/hunt-repository-context';
+import { MemberRepositoryProvider } from '@/data/member-repository-context';
 import { queryClient } from '@/lib/query-client';
 import { NAV_THEME } from '@/lib/theme';
 import { fontAssets } from '@/theme/fonts';
@@ -43,13 +44,15 @@ export default function RootLayout() {
         repository={appBackend.repository}
         connection={appBackend.connection}
         followUp={appBackend.followUp}>
-        <ThemeProvider value={NAV_THEME}>
-          <StatusBar style="dark" />
-          <Stack>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-          </Stack>
-          <PortalHost />
-        </ThemeProvider>
+        <MemberRepositoryProvider repository={appBackend.members}>
+          <ThemeProvider value={NAV_THEME}>
+            <StatusBar style="dark" />
+            <Stack>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+            </Stack>
+            <PortalHost />
+          </ThemeProvider>
+        </MemberRepositoryProvider>
       </HuntRepositoryProvider>
     </QueryClientProvider>
   );

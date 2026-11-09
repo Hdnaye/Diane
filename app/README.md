@@ -105,6 +105,18 @@ npm run format:check
     `max_participants` vaut `null` côté app quand il n'y a pas de limite (`0` dans PocketBase).
   - Un jour déjà pris (index unique sur `date`) devient `HuntDayTakenError`, affichée par le
     formulaire.
+- Adhérents (`src/app/members/`, accès par le bouton « Adhérents » de l'accueil) : liste triée par
+  nom (accents et casse ignorés), ajout, modification, suppression après confirmation (le back
+  supprime aussi les réponses : droit à l'effacement) ou « Ne plus inviter » (adhérent inactif).
+  Interface `MemberRepository` (`list`, `create`, `update`, `remove`, `setActive`), PocketBase
+  (`src/data/pocketbase-member-repository.ts`, même session que les battues : un 401 déclenche une
+  nouvelle authentification ; un refus sans erreur de champ, un 403 ou un 404 font revalider le
+  jeton, comme avec un back antérieur au 401 explicite) ou en mémoire.
+  Téléphone saisi librement (« 06 39 98 00 01 », « +33 6… »), envoyé en E.164 et affiché au
+  format national (`src/lib/phone.ts`, même règle que le back). Le formulaire
+  (`src/lib/member-form.ts`) vérifie tout en une fois ; les refus du back (numéro invalide,
+  doublon de téléphone ou d'e-mail, aucun contact) deviennent des messages français sous les
+  champs (`src/lib/member-messages.ts`). Aucune donnée d'adhérent n'est journalisée.
 - Calendrier : `HuntCalendar` (react-native-calendars, 100 % JS), locale française construite
   avec date-fns, semaine commençant le lundi ; jours rendus par un composant à classes NativeWind
   (aujourd'hui cerclé, battue en `accent-light`, sélection en `primary`).

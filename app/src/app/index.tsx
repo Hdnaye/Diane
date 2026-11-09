@@ -63,6 +63,9 @@ export default function HomeScreen() {
         onPress={createHunt}>
         <Text>Créer une battue</Text>
       </Button>
+      <Button variant="secondary" className="w-full" onPress={() => router.push('/members')}>
+        <Text>Adhérents</Text>
+      </Button>
       {!connection.isError && (
         <>
           <Text variant="h2">Prochaines battues</Text>

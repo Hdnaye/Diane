@@ -13,7 +13,9 @@ const {
   sendSummary,
   channelsToResend,
   STALE_SENDING_MS,
+  MIN_DEFAULT_DEADLINE_DELAY_MS,
   toPocketBaseDate,
+  planAnswer,
 } =
   require("../../pb_hooks/lib/invitations.cjs") as typeof import("../../pb_hooks/lib/invitations.cjs");
 
@@ -97,8 +99,23 @@ describe("defaultDeadline", () => {
     // Tomorrow, sent after 20:00 Paris (or exactly at 20:00).
     ["2026-11-08T19:30:00.000Z", "2026-11-09", "08:00"],
     ["2026-11-08T19:00:00.000Z", "2026-11-09", "08:00"],
+    // Tomorrow, sent less than 2 hours before 20:00 Paris (user decision:
+    // at least MIN_DEFAULT_DEADLINE_DELAY_MS to answer).
+    ["2026-11-08T17:01:00.000Z", "2026-11-09", "08:00"],
+    ["2026-11-08T18:59:00.000Z", "2026-11-09", "08:00"],
   ])("from %s for a hunt on %s at %s is none", (now, date, meeting_time) => {
     expect(defaultDeadline({ date, meeting_time }, new Date(now))).toBeNull();
+  });
+
+  it("leaves at least 2 hours to answer", () => {
+    expect(MIN_DEFAULT_DEADLINE_DELAY_MS).toBe(2 * 60 * 60 * 1000);
+    // Exactly 2 hours before 20:00 Paris: still the day before at 20:00.
+    expect(
+      defaultDeadline(
+        { date: "2026-11-09", meeting_time: "08:00" },
+        new Date("2026-11-08T17:00:00.000Z"),
+      ),
+    ).toBe("2026-11-08 19:00:00.000Z");
   });
 
   it.each([
@@ -172,6 +189,19 @@ describe("sendPlan", () => {
     expect(
       sendPlan(hunt({ date: "2026-11-10", response_deadline: "" }), NOW),
     ).toStrictEqual({ ok: true, deadline: "2026-11-09 19:00:00.000Z" });
+  });
+
+  it("refuses without deadline when the day before at 20:00 is less than 2 hours away", () => {
+    expect(
+      sendPlan(
+        hunt({ date: "2026-11-09", response_deadline: "" }),
+        new Date("2026-11-08T18:30:00.000Z"),
+      ),
+    ).toMatchObject({
+      ok: false,
+      code: "deadline_missing",
+      message: expect.stringMatching(/2 h/),
+    });
   });
 
   it("refuses without deadline when the day before at 20:00 has passed", () => {
@@ -337,6 +367,12 @@ describe("channelsToResend", () => {
     updated = "2026-11-08 09:59:00.000Z",
   ) => ({ sms_status, email_status, updated });
 
+  it("resends channels not sent: the gateway was unreachable during the sending", () => {
+    expect(
+      channelsToResend(invitation("not_sent", "sent"), context),
+    ).toStrictEqual({ sms: true, email: false });
+  });
+
   it("resends failed channels only", () => {
     expect(
       channelsToResend(invitation("failed", "sent"), context),
@@ -397,11 +433,66 @@ describe("sendSummary", () => {
         { sms_status: "sent", email_status: "skipped" },
         { sms_status: "failed", email_status: "sent" },
         { sms_status: "sent", email_status: "sent" },
+        { sms_status: "not_sent", email_status: "sent" },
       ]),
     ).toStrictEqual({
-      invited: 3,
-      sms: { sent: 2, failed: 1, skipped: 0 },
-      email: { sent: 2, failed: 0, skipped: 1 },
+      invited: 4,
+      sms: { sent: 2, failed: 1, skipped: 0, not_sent: 1 },
+      email: { sent: 3, failed: 0, skipped: 1, not_sent: 0 },
     });
+  });
+});
+
+describe("planAnswer", () => {
+  const base = {
+    hunt: { ...hunt(), max_participants: 2 },
+    current: "pending",
+    others: ["present", "absent", "pending"],
+  };
+
+  it("takes a free place on a yes", () => {
+    expect(planAnswer({ ...base, answer: "yes" }, NOW)).toStrictEqual({
+      ok: true,
+      participation: "present",
+      changed: true,
+    });
+  });
+
+  it("joins the waiting list when full", () => {
+    expect(
+      planAnswer(
+        { ...base, others: ["present", "present"], answer: "yes" },
+        NOW,
+      ),
+    ).toStrictEqual({ ok: true, participation: "waiting_list", changed: true });
+  });
+
+  it("keeps a repeated answer unchanged", () => {
+    expect(
+      planAnswer({ ...base, current: "waiting_list", answer: "yes" }, NOW),
+    ).toStrictEqual({
+      ok: true,
+      participation: "waiting_list",
+      changed: false,
+    });
+  });
+
+  it("refuses after the deadline or for a cancelled hunt", () => {
+    expect(
+      planAnswer(
+        {
+          ...base,
+          hunt: { ...base.hunt, response_deadline: "2026-11-08 09:00:00.000Z" },
+          answer: "no",
+        },
+        NOW,
+      ),
+    ).toMatchObject({ ok: false, refusal: { code: "deadline_passed" } });
+    expect(
+      planAnswer(
+        { ...base, hunt: { ...base.hunt, status: "cancelled" }, answer: "no" },
+        NOW,
+      ),
+    ).toMatchObject({ ok: false, refusal: { code: "hunt_cancelled" } });
   });
 });

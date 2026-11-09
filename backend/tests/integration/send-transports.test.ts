@@ -139,6 +139,7 @@ describe("invitations through the SMS gateway and SMTP", () => {
       sent: 1,
       failed: 0,
       skipped: 0,
+      not_sent: 0,
     });
     const request = gateway.requests.find((item) =>
       JSON.stringify(item.body).includes(member.phone as string),
@@ -166,6 +167,7 @@ describe("invitations through the SMS gateway and SMTP", () => {
       sent: 1,
       failed: 0,
       skipped: 0,
+      not_sent: 0,
     });
     const mail = smtp.mails.find((item) =>
       item.to.some((to) => to.includes(member.email as string)),
@@ -190,6 +192,7 @@ describe("invitations through the SMS gateway and SMTP", () => {
         sent: 0,
         failed: 1,
         skipped: 0,
+        not_sent: 0,
       });
       const invitation = await f.invitationOf(hunt.id, member.id);
       expect(invitation).toMatchObject({
@@ -217,6 +220,7 @@ describe("invitations through the SMS gateway and SMTP", () => {
         sent: 0,
         failed: 2,
         skipped: 0,
+        not_sent: 0,
       });
       expect(gateway.requests.length - before).toBe(2);
     } finally {
@@ -260,8 +264,8 @@ describe("invitations without SMS gateway nor SMTP", () => {
     expect(response.status).toBe(200);
     expect(response.body).toStrictEqual({
       invited: 2,
-      sms: { sent: 0, failed: 2, skipped: 0 },
-      email: { sent: 0, failed: 1, skipped: 1 },
+      sms: { sent: 0, failed: 2, skipped: 0, not_sent: 0 },
+      email: { sent: 0, failed: 1, skipped: 1, not_sent: 0 },
     });
     expect(await f.invitationOf(hunt.id, member.id)).toMatchObject({
       participation: "pending",
@@ -316,8 +320,8 @@ describe("invitations through a gateway that does not answer", () => {
       expect(response.status).toBe(200);
       expect(response.body).toStrictEqual({
         invited: 4,
-        sms: { sent: 0, failed: 4, skipped: 0 },
-        email: { sent: 4, failed: 0, skipped: 0 },
+        sms: { sent: 0, failed: 1, skipped: 0, not_sent: 3 },
+        email: { sent: 4, failed: 0, skipped: 0, not_sent: 0 },
       });
       expect(gateway.connections()).toBe(1);
       // One 5 s timeout, not 4 x 15 s.
@@ -359,8 +363,9 @@ describe("invitations through a gateway that does not answer", () => {
         sms_status: "failed",
         email_status: "sent",
       });
+      // Not attempted (gateway unreachable after the first timeout).
       expect(await f.invitationOf(hunt.id, last.id)).toMatchObject({
-        sms_status: "failed",
+        sms_status: "not_sent",
         email_status: "sent",
       });
     },

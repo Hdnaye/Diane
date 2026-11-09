@@ -45,6 +45,11 @@ export default defineConfig(
     ...vitest.configs.recommended,
   },
   {
+    // Members' answer page: plain browser ES modules, no bundler, no Node.
+    files: ["pb_public/**/*.js"],
+    languageOptions: { sourceType: "module", globals: globals.browser },
+  },
+  {
     // Hooks and migrations: plain scripts evaluated by PocketBase.
     files: ["pb_hooks/**/*.js", "pb_migrations/**/*.js"],
     ignores: ["pb_hooks/lib/**"],
@@ -72,6 +77,32 @@ export default defineConfig(
         {
           // The JSVM resolves bare and relative paths against node_modules or
           // the working directory, not the hook file: root them at __hooks.
+          selector:
+            "CallExpression[callee.name='require']:not([arguments.0.type='TemplateLiteral'][arguments.0.quasis.0.value.raw=''][arguments.0.expressions.0.name='__hooks'])",
+          message:
+            "Only require local modules through a path rooted at __hooks, e.g. require(`${__hooks}/lib/sms-reply.cjs`): Node modules do not exist in PocketBase's JSVM (goja).",
+        },
+      ],
+    },
+  },
+  {
+    // Hook helpers using PocketBase's APIs, shared by several hooks
+    // (`require(`${__hooks}/shared/x.cjs`)` inside a handler): CommonJS run
+    // in the JSVM, typed through pb_data/types.d.ts.
+    files: ["pb_hooks/shared/**/*.cjs"],
+    languageOptions: { sourceType: "commonjs", globals: {} },
+    rules: {
+      "no-undef": "off",
+      "@typescript-eslint/triple-slash-reference": [
+        "error",
+        { path: "always" },
+      ],
+      "@typescript-eslint/no-require-imports": "off",
+      "no-restricted-globals": ["error", ...forbidNodeGlobals(NODE_GLOBALS)],
+      "no-restricted-syntax": [
+        "error",
+        forbidDynamicImport,
+        {
           selector:
             "CallExpression[callee.name='require']:not([arguments.0.type='TemplateLiteral'][arguments.0.quasis.0.value.raw=''][arguments.0.expressions.0.name='__hooks'])",
           message:
