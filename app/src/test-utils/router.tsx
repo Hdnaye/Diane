@@ -24,15 +24,17 @@ export async function renderScreens(
     repository = createInMemoryHuntRepository(hunts),
     connection = alwaysConnected,
     followUp = createInMemoryHuntFollowUp(),
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
   }: {
     initialUrl?: string;
     hunts?: Hunt[];
     repository?: HuntRepository;
     connection?: ServerConnection;
     followUp?: HuntFollowUpRepository;
+    /** To render screens again with what the app keeps in memory (e.g. a sending under way). */
+    queryClient?: QueryClient;
   } = {}
 ) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   function TestLayout() {
     return (
       <QueryClientProvider client={queryClient}>

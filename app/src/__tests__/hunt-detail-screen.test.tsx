@@ -1,5 +1,6 @@
 import { act, userEvent, within } from '@testing-library/react-native';
 import { screen } from 'expo-router/testing-library';
+import { ClientResponseError } from 'pocketbase';
 
 import HuntDetailScreen from '@/app/hunts/[id]';
 import {
@@ -187,7 +188,7 @@ describe('HuntDetailScreen', () => {
       await user.press(await screen.findByRole('button', { name: 'Envoyer' }));
 
       expect(
-        await screen.findByText('Envoi en cours… Cela peut prendre quelques secondes.')
+        await screen.findByText('Envoi en cours… Cela peut prendre quelques minutes.')
       ).toBeOnTheScreen();
       const sending = screen.getByRole('button', { name: 'Envoi en cours' });
       expect(sending).toBeDisabled();
@@ -236,7 +237,7 @@ describe('HuntDetailScreen', () => {
       expect(await screen.findByText(message)).toBeOnTheScreen();
     });
 
-    it('says when the server cannot be reached', async () => {
+    it('says the sending may go on when the connection is lost', async () => {
       const user = userEvent.setup();
       const followUp = draft();
       jest.spyOn(followUp, 'sendInvitations').mockRejectedValue(new Error('network down'));
@@ -247,9 +248,75 @@ describe('HuntDetailScreen', () => {
 
       expect(
         await screen.findByText(
-          "L'envoi n'a pas pu se faire. Vérifiez la connexion, puis réessayez."
+          "La connexion au serveur a été interrompue. Si l'envoi avait commencé, il continue sur le serveur : l'état des envois se met à jour ci-dessous."
         )
       ).toBeOnTheScreen();
+    });
+
+    it('asks to try again later when the server answers with an error', async () => {
+      const user = userEvent.setup();
+      const followUp = draft();
+      jest
+        .spyOn(followUp, 'sendInvitations')
+        .mockRejectedValue(new ClientResponseError({ status: 500 }));
+      await openHunt(followUp);
+
+      await user.press(await screen.findByRole('button', { name: 'Envoyer les invitations' }));
+      await user.press(await screen.findByRole('button', { name: 'Envoyer' }));
+
+      expect(
+        await screen.findByText("L'envoi n'a pas pu se faire. Réessayez dans un moment.")
+      ).toBeOnTheScreen();
+    });
+
+    it('shows the messages being sent, per channel', async () => {
+      await openHunt(
+        createInMemoryHuntFollowUp({
+          hunts: [aHuntDetail({ status: 'invitations_sent' })],
+          members: [HENRI],
+          invitations: [
+            {
+              id: 'i5',
+              huntId: 'hunt1',
+              member: HENRI,
+              sms_status: 'sending',
+              email_status: 'sent',
+            },
+          ],
+        })
+      );
+
+      expect(await screen.findByText("SMS en cours d'envoi")).toBeOnTheScreen();
+    });
+
+    it('stays in progress when the screen is opened again during a sending', async () => {
+      const user = userEvent.setup();
+      const followUp = draft();
+      let finish: (summary: SendSummary) => void = () => {};
+      const send = jest
+        .spyOn(followUp, 'sendInvitations')
+        .mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+      const { unmount, queryClient } = await openHunt(followUp);
+
+      await user.press(await screen.findByRole('button', { name: 'Envoyer les invitations' }));
+      await user.press(await screen.findByRole('button', { name: 'Envoyer' }));
+      expect(await screen.findByRole('button', { name: 'Envoi en cours' })).toBeDisabled();
+
+      // The organizer leaves the screen, then opens the hunt again: a new screen.
+      await unmount();
+      await renderScreens(routes, { initialUrl: '/hunts/hunt1', followUp, queryClient });
+
+      expect(await screen.findByRole('button', { name: 'Envoi en cours' })).toBeDisabled();
+      expect(send).toHaveBeenCalledTimes(1);
+
+      await act(async () =>
+        finish({
+          invited: 0,
+          sms: { sent: 0, failed: 0, skipped: 0 },
+          email: { sent: 0, failed: 0, skipped: 0 },
+        })
+      );
+      expect(await screen.findByRole('button', { name: 'Envoyer les invitations' })).toBeEnabled();
     });
 
     it('resends the failed invitations', async () => {
