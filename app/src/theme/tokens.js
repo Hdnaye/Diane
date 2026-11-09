@@ -62,29 +62,33 @@ const fontFamily = {
   'sans-bold': ['AtkinsonHyperlegible_700Bold', ...fallbackFonts],
 };
 
-/** Generous type scale: body text ("base") is 20px. Format: [fontSize, lineHeight]. */
+/** Readable type scale: body text ("base") is 18px. Format: [fontSize, lineHeight]. */
 const fontSize = {
-  xs: ['1rem', '1.5rem'],
-  sm: ['1.125rem', '1.625rem'],
-  base: ['1.25rem', '1.75rem'],
-  lg: ['1.375rem', '1.875rem'],
-  xl: ['1.5rem', '2rem'],
-  '2xl': ['1.75rem', '2.25rem'],
-  '3xl': ['2.125rem', '2.5rem'],
-  '4xl': ['2.5rem', '3rem'],
+  xs: ['0.9375rem', '1.375rem'],
+  sm: ['1rem', '1.5rem'],
+  base: ['1.125rem', '1.625rem'],
+  lg: ['1.25rem', '1.75rem'],
+  xl: ['1.375rem', '1.875rem'],
+  '2xl': ['1.5rem', '2rem'],
+  '3xl': ['1.75rem', '2.25rem'],
+  '4xl': ['2.125rem', '2.5rem'],
 };
 
 /**
- * Touch targets: "touch" (56px) for primary actions, "touch-lg" (64px) for prominent ones,
- * "touch-min" (48px) as the floor.
+ * Touch targets: "touch" (52px) for primary actions, "touch-lg" (56px) for prominent ones,
+ * "touch-min" (44px) as the floor.
  */
 const spacing = {
-  'touch-lg': '4rem',
-  touch: '3.5rem',
-  'touch-min': '3rem',
+  'touch-lg': '3.5rem',
+  touch: '3.25rem',
+  'touch-min': '2.75rem',
+  // What is drawn of a calendar day, inside its larger touch target; fits a 320 pt wide screen.
+  'calendar-day': '2.25rem',
+  // Space between the weeks of the calendar (react-native-calendars' own: 7px).
+  'calendar-week-gap': '0.0625rem',
   // Space above / below the calendar's day names (react-native-calendars' own 2px / 7px).
   'day-name-top': '0.125rem',
-  'day-name-bottom': '0.4375rem',
+  'day-name-bottom': '0.25rem',
 };
 
 /** Rounded, soft shapes: cards use "xl", buttons "lg", badges "full". */
