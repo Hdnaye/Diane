@@ -167,13 +167,16 @@ type MemoryData = {
       huntId: string;
     })[];
   reviewItems?: ReviewItem[];
+  /** The messages of a sending go out once this settles; until then, the sending is under way. */
+  sendingHeldUntil?: Promise<unknown>;
 };
 
-const emptyChannels = (): ChannelSummary => ({ sent: 0, failed: 0, skipped: 0 });
+const emptyChannels = (): ChannelSummary => ({ sent: 0, failed: 0, skipped: 0, not_sent: 0 });
 
 /**
- * In-memory implementation, used by the tests: sending invites the active members not yet
- * invited (every channel sent), cancelling notifies those who did not answer no.
+ * In-memory implementation, used by the tests: as on the server, a sending first marks the hunt as
+ * sent and claims the channels of the active members not yet invited, then every channel is sent;
+ * cancelling notifies those who did not answer no. Not reproduced: the default deadline.
  */
 export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
   const hunts = [...(data.hunts ?? [])];
@@ -211,12 +214,16 @@ export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
       participation,
       answered_via: via,
       answered_at: new Date().toISOString(),
+      updated: new Date().toISOString(),
     });
   }
 
   function refuseSending(target: HuntDetail) {
     if (target.status === 'cancelled') {
       throw new HuntActionError('hunt_cancelled');
+    }
+    if (target.status === 'closed') {
+      throw new HuntActionError('hunt_closed');
     }
   }
 
@@ -240,20 +247,27 @@ export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
           member.active !== false &&
           !invitations.some((item) => item.huntId === huntId && item.member.id === member.id)
       );
-      for (const member of invited) {
-        invitations.push({
-          id: `invitation-${nextId++}`,
-          huntId,
-          member: { id: member.id, name: member.name },
-          participation: 'pending',
-          answered_at: null,
-          answered_via: null,
+      target.status = 'invitations_sent';
+      const claimed: MemoryInvitation[] = invited.map((member) => ({
+        id: `invitation-${nextId++}`,
+        huntId,
+        member: { id: member.id, name: member.name },
+        participation: 'pending',
+        answered_at: null,
+        answered_via: null,
+        sms_status: 'sending',
+        email_status: 'sending',
+        updated: new Date().toISOString(),
+      }));
+      invitations.push(...claimed);
+      await data.sendingHeldUntil;
+      for (const item of claimed) {
+        Object.assign(item, {
           sms_status: 'sent',
           email_status: 'sent',
           updated: new Date().toISOString(),
         });
       }
-      target.status = 'invitations_sent';
       return {
         invited: invited.length,
         sms: { ...emptyChannels(), sent: invited.length },
@@ -265,6 +279,7 @@ export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
       const summary: SendSummary = { invited: 0, sms: emptyChannels(), email: emptyChannels() };
       for (const item of invitations) {
         if (item.huntId !== huntId || item.participation !== 'pending') continue;
+        if (members.find((member) => member.id === item.member.id)?.active === false) continue;
         const smsFailed = isResendable(item.sms_status, item, Date.now());
         const emailFailed = isResendable(item.email_status, item, Date.now());
         if (smsFailed) {
@@ -275,7 +290,10 @@ export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
           item.email_status = 'sent';
           summary.email.sent += 1;
         }
-        if (smsFailed || emailFailed) summary.invited += 1;
+        if (smsFailed || emailFailed) {
+          summary.invited += 1;
+          item.updated = new Date().toISOString();
+        }
       }
       return summary;
     },
