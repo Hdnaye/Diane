@@ -142,6 +142,7 @@ describe('PocketBase hunt follow-up', () => {
         answered_via: 'sms',
         sms_status: 'sent',
         email_status: 'skipped',
+        updated: '2026-11-07T09:00:00.000Z',
         member: { id: 'member1', name: 'Jeanne Fictive' },
       },
       {
@@ -151,6 +152,7 @@ describe('PocketBase hunt follow-up', () => {
         answered_via: null,
         sms_status: 'failed',
         email_status: null,
+        updated: '2026-11-07T09:00:00.000Z',
         member: { id: 'member2', name: 'Paul Exemple' },
       },
     ]);

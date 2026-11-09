@@ -292,6 +292,35 @@ describe('HuntDetailScreen', () => {
       );
 
       expect(await screen.findByText("SMS en cours d'envoi")).toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: 'Renvoyer les échecs' })).not.toBeOnTheScreen();
+    });
+
+    it('offers to resend a sending left without news, as the server then takes it over', async () => {
+      const user = userEvent.setup();
+      await openHunt(
+        createInMemoryHuntFollowUp({
+          hunts: [aHuntDetail({ status: 'invitations_sent' })],
+          members: [HENRI],
+          invitations: [
+            {
+              id: 'i5',
+              huntId: 'hunt1',
+              member: HENRI,
+              sms_status: 'sending',
+              email_status: 'sent',
+              // 10 minutes before TODAY: the server's STALE_SENDING_MS.
+              updated: '2026-11-08T08:50:00.000Z',
+            },
+          ],
+        })
+      );
+
+      expect(await screen.findByText('SMS à renvoyer')).toBeOnTheScreen();
+      expect(screen.queryByText("SMS en cours d'envoi")).not.toBeOnTheScreen();
+      await user.press(screen.getByRole('button', { name: 'Renvoyer les échecs' }));
+
+      expect(await screen.findByText('1 invitation renvoyée : 1 SMS envoyé.')).toBeOnTheScreen();
+      expect(screen.queryByText('SMS à renvoyer')).not.toBeOnTheScreen();
     });
 
     it('stays in progress when the screen is opened again during a sending', async () => {
