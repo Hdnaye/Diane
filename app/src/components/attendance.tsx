@@ -1,4 +1,4 @@
-import { TriangleAlert } from 'lucide-react-native';
+import { Clock, TriangleAlert } from 'lucide-react-native';
 import { View } from 'react-native';
 
 import { StatusBadge, type AnswerStatus } from '@/components/status-badge';
@@ -29,7 +29,8 @@ export function AttendanceCounters({
   const tiles = [
     {
       label: 'Présents',
-      value: maxParticipants === null ? `${counts.present}` : `${counts.present} / ${maxParticipants}`,
+      value:
+        maxParticipants === null ? `${counts.present}` : `${counts.present} / ${maxParticipants}`,
       a11y:
         maxParticipants === null
           ? `Présents : ${counts.present}`
@@ -108,6 +109,11 @@ function InvitationRow({
     entry.sms_status === 'failed' && 'SMS non envoyé',
     entry.email_status === 'failed' && 'E-mail non envoyé',
   ].filter((failure): failure is string => Boolean(failure));
+  // Not attempted (gateway unreachable): waiting to be resent, not a failure.
+  const waiting = [
+    entry.sms_status === 'not_sent' && "SMS en attente d'envoi",
+    entry.email_status === 'not_sent' && "E-mail en attente d'envoi",
+  ].filter((item): item is string => Boolean(item));
   const name = entry.member.name || 'Adhérent supprimé';
 
   return (
@@ -123,6 +129,12 @@ function InvitationRow({
         <View key={failure} className="flex-row items-center gap-2">
           <Icon as={TriangleAlert} className="text-danger" aria-hidden />
           <Text className="font-sans-bold text-danger">{failure}</Text>
+        </View>
+      ))}
+      {waiting.map((item) => (
+        <View key={item} className="flex-row items-center gap-2">
+          <Icon as={Clock} className="text-warning" aria-hidden />
+          <Text className="font-sans-bold text-warning">{item}</Text>
         </View>
       ))}
       {actions.length > 0 && (

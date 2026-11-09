@@ -26,8 +26,7 @@ import {
 type MemberName = Pick<MembersResponse, 'id' | 'name'>;
 type InvitationWithMember = InvitationsResponse<{ member?: MemberName }>;
 type InvitationWithHunt = InvitationsResponse<{ hunt?: Pick<HuntsResponse, 'id' | 'date'> }>;
-// `reason` comes with backend PR #12 (not in the generated types on main yet).
-type ReviewRecord = SmsReviewQueueResponse<{ member?: MemberName }> & { reason?: string };
+type ReviewRecord = SmsReviewQueueResponse<{ member?: MemberName }>;
 
 /** Attendance of a hunt (`GET /api/diane/hunts/{id}/attendance`): only what the app reads. */
 type Attendance = { free_places: number | null };
@@ -113,7 +112,7 @@ export function createPocketBaseHuntFollowUp(
       try {
         return await huntAction<CancelSummary>(huntId, 'cancel');
       } catch (error) {
-        // Route added by backend PR #12: a server without it answers 404.
+        // A server older than the cancellation route answers 404.
         if (status(error) === 404) {
           throw new FeatureUnavailableError('cancel');
         }

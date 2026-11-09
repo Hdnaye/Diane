@@ -24,12 +24,13 @@ export type InvitationEntry = Pick<InvitationsResponse, 'id' | 'participation'> 
     member: Pick<MembersResponse, 'id' | 'name'>;
   };
 
-export type ChannelSummary = { sent: number; failed: number; skipped: number };
+/** Per channel; `not_sent`: not attempted (gateway unreachable), resent by `resend-failed`. */
+export type ChannelSummary = { sent: number; failed: number; skipped: number; not_sent?: number };
 
 /** What `send-invitations` / `resend-failed` answer. */
 export type SendSummary = { invited: number; sms: ChannelSummary; email: ChannelSummary };
 
-/** What `cancel` answers (backend PR #12). */
+/** What `cancel` answers. */
 export type CancelSummary = { notified: number; sms: ChannelSummary; email: ChannelSummary };
 
 /**
@@ -61,7 +62,7 @@ export interface HuntFollowUpRepository {
   /** Rejects with `HuntActionError` when the server refuses. */
   sendInvitations(huntId: string): Promise<SendSummary>;
   resendFailed(huntId: string): Promise<SendSummary>;
-  /** Rejects with `FeatureUnavailableError` while the server has no cancellation route. */
+  /** Rejects with `FeatureUnavailableError` on a server without the cancellation route. */
   cancelHunt(huntId: string): Promise<CancelSummary>;
   /** An answer entered by the organizer (`answered_via: manual`). */
   setParticipation(invitationId: string, participation: ManualParticipation): Promise<void>;
@@ -214,8 +215,8 @@ export function createInMemoryHuntFollowUp(data: MemoryData = {}) {
       const summary: SendSummary = { invited: 0, sms: emptyChannels(), email: emptyChannels() };
       for (const item of invitations) {
         if (item.huntId !== huntId || item.participation !== 'pending') continue;
-        const smsFailed = item.sms_status === 'failed';
-        const emailFailed = item.email_status === 'failed';
+        const smsFailed = item.sms_status === 'failed' || item.sms_status === 'not_sent';
+        const emailFailed = item.email_status === 'failed' || item.email_status === 'not_sent';
         if (smsFailed) {
           item.sms_status = 'sent';
           summary.sms.sent += 1;

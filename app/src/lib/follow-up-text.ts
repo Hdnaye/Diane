@@ -16,8 +16,11 @@ function channelParts(sms: ChannelSummary, email: ChannelSummary): string[] {
   return [
     sms.sent && plural(sms.sent, 'SMS envoyé', 'SMS envoyés'),
     sms.failed && plural(sms.failed, 'SMS non envoyé', 'SMS non envoyés'),
+    sms.not_sent && plural(sms.not_sent, "SMS en attente d'envoi", "SMS en attente d'envoi"),
     email.sent && plural(email.sent, 'e-mail envoyé', 'e-mails envoyés'),
     email.failed && plural(email.failed, 'e-mail non envoyé', 'e-mails non envoyés'),
+    email.not_sent &&
+      plural(email.not_sent, "e-mail en attente d'envoi", "e-mails en attente d'envoi"),
   ].filter((part): part is string => Boolean(part));
 }
 
@@ -75,10 +78,7 @@ export function formatPhone(phone: string): string {
   return `0${match[1]}`.replace(/(\d{2})(?=\d)/g, '$1 ');
 }
 
-/**
- * Why an SMS is to check (`reason`, backend PR #12; generated type `SmsReviewQueueReasonOptions`
- * there). An unknown or missing reason gets a generic label.
- */
+/** Why an SMS is to check. An unknown or missing reason gets a generic label. */
 const REVIEW_REASONS: Record<string, string> = {
   unknown_sender: 'Numéro inconnu',
   inactive_member: 'Adhérent inactif',
@@ -92,6 +92,6 @@ const REVIEW_REASONS: Record<string, string> = {
   ambiguous: 'Réponse ambiguë ou conditionnelle',
 };
 
-export function reviewReason(reason: string | null): string {
+export function reviewReason(reason: string | null | undefined): string {
   return (reason && REVIEW_REASONS[reason]) || 'Message non reconnu';
 }

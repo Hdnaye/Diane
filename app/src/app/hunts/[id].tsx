@@ -113,7 +113,12 @@ export default function HuntDetailScreen() {
   const open = hunt.status !== 'cancelled' && hunt.status !== 'closed';
   const busy = send.isPending || resend.isPending || cancel.isPending;
 
-  const counts: Record<Participation, number> = { present: 0, waiting_list: 0, absent: 0, pending: 0 };
+  const counts: Record<Participation, number> = {
+    present: 0,
+    waiting_list: 0,
+    absent: 0,
+    pending: 0,
+  };
   for (const entry of invitations) {
     counts[entry.participation] += 1;
   }
@@ -121,7 +126,9 @@ export default function HuntDetailScreen() {
   const hasFailures = invitations.some(
     (entry) =>
       entry.participation === 'pending' &&
-      (entry.sms_status === 'failed' || entry.email_status === 'failed')
+      [entry.sms_status, entry.email_status].some(
+        (channel) => channel === 'failed' || channel === 'not_sent'
+      )
   );
 
   function sendInvitations() {
