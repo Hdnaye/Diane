@@ -1,4 +1,4 @@
-import { act, fireEvent, userEvent, within } from '@testing-library/react-native';
+import { act, userEvent, within } from '@testing-library/react-native';
 import { screen } from 'expo-router/testing-library';
 
 import HuntDetailScreen from '@/app/hunts/[id]';
@@ -85,9 +85,9 @@ function openHunt(followUp: HuntFollowUpRepository) {
   return renderScreens(routes, { initialUrl: '/hunts/hunt1', followUp });
 }
 
-/** The list of a group of answers (its heading, then its members). */
-function group(name: RegExp) {
-  return within(screen.getByRole('list', { name }));
+/** The list of a group of answers, e.g. "Présents (2)": its heading, then its members. */
+function group(title: string) {
+  return within(screen.getByLabelText(new RegExp(`^${title} \\(\\d+\\)$`)));
 }
 
 describe('HuntDetailScreen', () => {
@@ -158,7 +158,7 @@ describe('HuntDetailScreen', () => {
       expect(
         screen.queryByRole('button', { name: 'Envoyer les invitations' })
       ).not.toBeOnTheScreen();
-      expect(group(/Sans réponse/).getByText('Jeanne Fictive')).toBeOnTheScreen();
+      expect(group('Sans réponse').getByText('Jeanne Fictive')).toBeOnTheScreen();
     });
 
     it('sends nothing when the organizer changes his mind', async () => {
@@ -256,7 +256,8 @@ describe('HuntDetailScreen', () => {
       const user = userEvent.setup();
       await openHunt(sentHunt());
 
-      expect(await group(/Sans réponse/).findByText('SMS non envoyé')).toBeOnTheScreen();
+      expect(await screen.findByText('SMS non envoyé')).toBeOnTheScreen();
+      expect(group('Sans réponse').getByText('SMS non envoyé')).toBeOnTheScreen();
       await user.press(screen.getByRole('button', { name: 'Renvoyer les échecs' }));
 
       expect(await screen.findByText('1 invitation renvoyée : 1 SMS envoyé.')).toBeOnTheScreen();
@@ -274,14 +275,14 @@ describe('HuntDetailScreen', () => {
       expect(screen.getByLabelText('Absents : 1')).toBeOnTheScreen();
       expect(screen.getByLabelText('Sans réponse : 1')).toBeOnTheScreen();
 
-      const present = group(/^Présents/);
+      const present = group('Présents');
       expect(present.getAllByText('Présent')).toHaveLength(2);
       expect(present.getByText('Jeanne Fictive')).toBeOnTheScreen();
       expect(present.getByText('Par SMS, samedi 7 novembre à 14 h 32')).toBeOnTheScreen();
       expect(present.getByText('Par le lien, samedi 7 novembre à 16 h 00')).toBeOnTheScreen();
-      expect(group(/^Liste d\'attente/).getByText('Marc Essai')).toBeOnTheScreen();
-      expect(group(/^Absents/).getByText('Lucie Démo')).toBeOnTheScreen();
-      expect(group(/^Sans réponse/).getByText('Henri Test')).toBeOnTheScreen();
+      expect(group("Liste d'attente").getByText('Marc Essai')).toBeOnTheScreen();
+      expect(group('Absents').getByText('Lucie Démo')).toBeOnTheScreen();
+      expect(group('Sans réponse').getByText('Henri Test')).toBeOnTheScreen();
     });
 
     it('refreshes the answers regularly', async () => {
@@ -304,9 +305,9 @@ describe('HuntDetailScreen', () => {
       expect(await screen.findByLabelText('Sans réponse : 1')).toBeOnTheScreen();
 
       await followUp.applyAnswer({ id: 'i5', huntId: 'hunt1' }, 'no');
-      await act(async () => {
-        fireEvent(screen.getByTestId('hunt-detail-refresh'), 'refresh');
-      });
+      // The pull gesture itself is native: the test triggers what it calls.
+      const { refreshControl } = screen.getByTestId('hunt-detail').props;
+      await act(() => refreshControl.props.onRefresh());
 
       expect(await screen.findByLabelText('Absents : 2')).toBeOnTheScreen();
     });
@@ -318,11 +319,11 @@ describe('HuntDetailScreen', () => {
       await openHunt(sentHunt({ max_participants: null }));
 
       await user.press(await screen.findByRole('button', { name: 'Marquer présent : Henri Test' }));
-      expect(await group(/^Présents/).findByText('Henri Test')).toBeOnTheScreen();
-      expect(group(/^Présents/).getByText(/^Saisi par vous/)).toBeOnTheScreen();
+      expect(await group('Présents').findByText('Henri Test')).toBeOnTheScreen();
+      expect(group('Présents').getByText(/^Saisi par vous/)).toBeOnTheScreen();
 
       await user.press(screen.getByRole('button', { name: 'Marquer absent : Henri Test' }));
-      expect(await group(/^Absents/).findByText('Henri Test')).toBeOnTheScreen();
+      expect(await group('Absents').findByText('Henri Test')).toBeOnTheScreen();
     });
 
     it('moves a member up from the waiting list when a place is free', async () => {
@@ -331,7 +332,7 @@ describe('HuntDetailScreen', () => {
 
       await user.press(await screen.findByRole('button', { name: 'Faire monter : Marc Essai' }));
 
-      expect(await group(/^Présents/).findByText('Marc Essai')).toBeOnTheScreen();
+      expect(await group('Présents').findByText('Marc Essai')).toBeOnTheScreen();
       expect(screen.getByLabelText('Présents : 3 sur 3 places')).toBeOnTheScreen();
     });
 
@@ -345,11 +346,11 @@ describe('HuntDetailScreen', () => {
           'La battue est complète (2 places sur 2). Faire monter Marc Essai quand même ?'
         )
       ).toBeOnTheScreen();
-      expect(group(/^Liste d\'attente/).getByText('Marc Essai')).toBeOnTheScreen();
+      expect(group("Liste d'attente").getByText('Marc Essai')).toBeOnTheScreen();
 
       await user.press(screen.getByRole('button', { name: 'Oui, faire monter' }));
 
-      expect(await group(/^Présents/).findByText('Marc Essai')).toBeOnTheScreen();
+      expect(await group('Présents').findByText('Marc Essai')).toBeOnTheScreen();
       expect(screen.getByLabelText('Présents : 3 sur 2 places')).toBeOnTheScreen();
     });
 
@@ -361,7 +362,7 @@ describe('HuntDetailScreen', () => {
       await user.press(await screen.findByRole('button', { name: 'Non' }));
 
       expect(screen.queryByText(/quand même/)).not.toBeOnTheScreen();
-      expect(group(/^Liste d\'attente/).getByText('Marc Essai')).toBeOnTheScreen();
+      expect(group("Liste d'attente").getByText('Marc Essai')).toBeOnTheScreen();
     });
   });
 
