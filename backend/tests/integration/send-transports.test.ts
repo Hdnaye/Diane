@@ -323,8 +323,9 @@ describe("invitations through a gateway that does not answer", () => {
         sms: { sent: 0, failed: 1, skipped: 0, not_sent: 3 },
         email: { sent: 4, failed: 0, skipped: 0, not_sent: 0 },
       });
-      expect(gateway.connections()).toBe(1);
-      // One 5 s timeout, not 4 x 15 s.
+      // The SMS, then a quick reachability check (GET /health, 2 s).
+      expect(gateway.connections()).toBe(2);
+      // One 5 s timeout and a 2 s check, not 4 x 5 s.
       expect(elapsed).toBeGreaterThanOrEqual(4_500);
       expect(elapsed).toBeLessThan(9_000);
     },

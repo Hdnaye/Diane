@@ -1,7 +1,8 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-// Members' answers through their personal link ({DIANE_PUBLIC_URL}/r/{token},
-// a page of the app calling these routes). Public: the invitation token is
+// Members' answers through their personal link ({DIANE_PUBLIC_URL}/r/{token}:
+// a standalone HTML page served by PocketBase, pb_hooks/answer-page.pb.js,
+// whose script calls these routes). Public: the invitation token is
 // the only key; an unknown token gets the same 404 as a malformed one. The
 // answers show the hunt, the deadline and the member's own answer, nothing
 // personal. Rate limited per IP (migration 1762500600_invitation_sending.js).

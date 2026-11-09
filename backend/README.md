@@ -259,11 +259,18 @@ PocketBase):
   Same API for the phone's local server (`http://<phone-ip>:8080`, the
   backend must reach the phone) and the cloud relay
   (`https://api.sms-gate.app/3rdparty/v1`). A 2xx (202) means queued on the
-  phone, not delivered. Timeout: 5 s. Once the gateway is unreachable
-  (connection refused, timeout, DNS), the remaining SMS of the same request
-  are recorded `not_sent` without trying (a phone switched off costs one
-  timeout, not one per SMS); an HTTP error answer (4xx/5xx) only fails its
-  own message. Resend the failures with `resend-failed`. Just before each
+  phone, not delivered. Timeout: 5 s. Once the gateway is unreachable, the
+  remaining SMS of the same request are recorded `not_sent` without trying
+  (a phone switched off costs one timeout, not one per SMS). Unreachable
+  means a connection error (refused, reset, DNS, no route), or a timeout
+  followed by a failed quick check (`GET {DIANE_SMS_GATEWAY_URL}/health`,
+  2 s, any HTTP answer counts). Go reports the same « context deadline
+  exceeded » for a phone switched off (connection never established) and
+  for a slow one, hence the check: when the phone answers it, the SMS that
+  timed out is `failed` (it may have been taken: resending it is safe, its
+  id is the same) and the next members still get theirs in the same
+  sending; a slow phone then costs up to 5 s per SMS. An HTTP error answer
+  (4xx/5xx) only fails its own message. Resend the failures with `resend-failed`. Just before each
   channel is sent, its `sending` status is refreshed (so `updated`), in a
   transaction checking that the invitation is still as the request left it:
   a long batch is never seen as abandoned by `resend-failed`, and a channel
@@ -404,7 +411,8 @@ message (tested).
 
 ### Reminders
 
-A cron (`dianeReminders`, every 10 minutes, `pb_hooks/reminders.pb.js`)
+A cron (`dianeReminders`, every 10 minutes, or the cron expression
+`DIANE_REMINDER_SCHEDULE` (tests), `pb_hooks/reminders.pb.js`)
 reminds the members who have not answered, 24 hours before the response
 deadline: invitations still `pending` of active members, hunts
 `invitations_sent` (not cancelled or closed) with a deadline, once
@@ -505,6 +513,17 @@ Hook logs carry ids only (invitation, channel, reason).
 generates `app/src/lib/pocketbase-types.ts` with pocketbase-typegen (never
 edit it by hand). A test fails when it is out of date: run `npm run typegen`
 after changing `pb_migrations/` and commit the result.
+
+### Development databases and edited migrations
+
+Migration `1762501100_notice_attempts.js` was changed during its review
+(an `unknown` status replaced by `not_sent`) before reaching `main`. A
+development `pb_data/` that applied the earlier version keeps the old
+status values: start from a fresh `pb_data/` (delete it, then
+`npm run setup`), or revert and reapply it
+(`bin/pocketbase migrate down 1 --dir=pb_data`, then `npm run setup`).
+Production and test databases are not concerned (the migration was never
+deployed; tests always start from an empty database).
 
 ### First superuser
 

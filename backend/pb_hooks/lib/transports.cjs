@@ -25,6 +25,22 @@
 const GATEWAY_TIMEOUT_S = 5;
 
 /**
+ * Seconds of the quick reachability check after a timeout (see
+ * createTransports).
+ */
+const HEALTH_CHECK_TIMEOUT_S = 2;
+
+/**
+ * Errors proving that no connection to the gateway could be made or kept
+ * (Go net errors: refused, reset, DNS, unreachable network). A timeout
+ * ("context deadline exceeded") cannot tell a phone switched off (the
+ * connection is never established) from a slow one: Go gives the same
+ * text, checked against PocketBase 0.40.6.
+ */
+const CONNECTION_ERROR =
+  /dial tcp|connection refused|connection reset|no such host|network is unreachable|no route to host|broken pipe|EOF/i;
+
+/**
  * @typedef {object} SmsConfig
  * @property {"gateway" | "fake"} kind
  * @property {string} url Base URL of the gateway API, without trailing "/".
@@ -158,8 +174,26 @@ function gatewayRequest(config, message) {
 }
 
 /**
+ * Quick check that the gateway's HTTP server answers at all (any status
+ * counts, even 404: the phone is reachable).
+ *
+ * @param {SmsConfig} config
+ */
+function healthCheckRequest(config) {
+  return {
+    url: `${config.url}/health`,
+    method: "GET",
+    headers: {
+      Authorization: `Basic ${base64(`${config.username}:${config.password}`)}`,
+    },
+    body: "",
+    timeout: HEALTH_CHECK_TIMEOUT_S,
+  };
+}
+
+/**
  * @typedef {object} TransportIo PocketBase primitives.
- * @property {(request: ReturnType<typeof gatewayRequest>) => { statusCode: number }} httpSend
+ * @property {(request: { url: string, method: string, headers: Record<string, string>, body: string, timeout: number }) => { statusCode: number }} httpSend
  * @property {(message: { from: { address: string, name: string }, to: { address: string }[], subject: string, text: string }) => void} mailSend
  * @property {(kind: "sms" | "email", message: SmsMessage | EmailMessage) => void} record
  *   Writes a message of a fake transport into the outbox.
@@ -208,11 +242,25 @@ function createTransports(config, io) {
     },
   });
 
-  // Once the gateway was unreachable (connection refused, timeout, DNS),
-  // the next SMS of these transports (one sending) fail at once: a phone
-  // switched off would otherwise cost one timeout per SMS. An HTTP error
-  // answer concerns one message: the next ones are still sent.
+  // Once the gateway was unreachable, the next SMS of these transports (one
+  // sending) are not attempted (`not_sent`): a phone switched off would
+  // otherwise cost one timeout per SMS. Unreachable: a connection error
+  // (refused, reset, DNS...), or a timeout followed by a failed quick check
+  // (HEALTH_CHECK_TIMEOUT_S). A timeout while the phone answers the check
+  // is a slow phone: that SMS failed (it may have been taken: resending it
+  // is safe, see SmsMessage.id) and the next ones are still sent. An HTTP
+  // error answer concerns one message: the next ones are still sent.
   let unreachable = false;
+
+  /** Whether the gateway answers the quick check. */
+  const reachable = () => {
+    try {
+      io.httpSend(healthCheckRequest(config.sms));
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   /** @type {Transport<SmsMessage>} */
   const gateway = {
@@ -230,10 +278,13 @@ function createTransports(config, io) {
       let response;
       try {
         response = io.httpSend(gatewayRequest(config.sms, message));
-      } catch {
+      } catch (cause) {
+        // The cause may quote the request: only classified, not repeated.
+        const text = String(cause instanceof Error ? cause.message : cause);
+        if (!CONNECTION_ERROR.test(text) && reachable()) {
+          throw failure("SMS gateway did not answer in time.", "failed");
+        }
         unreachable = true;
-        // The cause may quote the request: not repeated. A timeout may
-        // hide an SMS taken by a slow phone: resending it is safe (its id).
         throw failure("SMS gateway unreachable.", "failed");
       }
       // Duplicate id: the gateway already took this message (an earlier
@@ -307,6 +358,7 @@ module.exports = {
   transportConfig,
   base64,
   gatewayRequest,
+  healthCheckRequest,
   createTransports,
   deliver,
 };

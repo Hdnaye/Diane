@@ -31,6 +31,13 @@ export async function startFakeGateway() {
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", async () => {
+      // Reachability check: the phone's HTTP server answers at once even
+      // when sending an SMS is slow. Not recorded.
+      if (request.method === "GET" && !down) {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ status: "pass" }));
+        return;
+      }
       const recorded = {
         method: request.method ?? "",
         url: request.url ?? "",

@@ -466,4 +466,36 @@ describe("resend failed invitations", () => {
       ),
     ).toHaveLength(1);
   }, 30_000);
+
+  it("keeps sending to the next members when a slow phone answers too late", async () => {
+    const members = [];
+    for (let i = 0; i < 4; i++) members.push(await newMember({ email: "" }));
+    const hunt = await newHunt();
+    gateway.delayAnswers(6000);
+    let response;
+    try {
+      response = await send(hunt.id);
+    } finally {
+      gateway.delayAnswers(0);
+    }
+
+    // Each SMS timed out but the phone is reachable (quick check): all 4
+    // taken by the phone in the same sending, none cut off.
+    expect(response.body.sms).toStrictEqual({
+      sent: 0,
+      failed: 4,
+      skipped: 0,
+      not_sent: 0,
+    });
+    const accepted = (member: ApiRecord) =>
+      gateway.accepted.filter((request) =>
+        JSON.stringify(request.body).includes(member.phone as string),
+      ).length;
+    expect(members.map(accepted)).toStrictEqual([1, 1, 1, 1]);
+
+    // Resent with the same ids: duplicates rejected, recorded sent.
+    const resent = await resend(hunt.id);
+    expect(resent.body.sms).toMatchObject({ sent: 4, failed: 0 });
+    expect(members.map(accepted)).toStrictEqual([1, 1, 1, 1]);
+  }, 90_000);
 });
