@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIsFocused } from 'expo-router';
 
 import type { ManualParticipation } from '@/data/hunt-follow-up';
@@ -14,6 +14,7 @@ export const followUpKeys = {
   activeMembers: ['active-members'] as const,
   review: ['sms-review'] as const,
   openInvitations: (memberId: string) => ['open-invitations', memberId] as const,
+  sending: (id: string) => ['send-invitations', id] as const,
 };
 
 export function useHuntDetail(id: string) {
@@ -55,13 +56,25 @@ function useRefreshHunt(huntId: string) {
   return () => queryClient.invalidateQueries({ queryKey: followUpKeys.hunt(huntId) });
 }
 
+/**
+ * Sending the invitations: synchronous on the server, it may last minutes with a slow gateway
+ * phone. The app sets no timeout on the request and neither does the SDK or React Native on
+ * Android, but iOS may end it after a minute without an answer (URLSession's default, not checked
+ * on a device): the sending then goes on on the server. The answers keep being refreshed meanwhile.
+ */
 export function useSendInvitations(huntId: string) {
   const followUp = useHuntFollowUpRepository();
   const refresh = useRefreshHunt(huntId);
   return useMutation({
+    mutationKey: followUpKeys.sending(huntId),
     mutationFn: () => followUp.sendInvitations(huntId),
     onSettled: refresh,
   });
+}
+
+/** Whether the invitations of this hunt are being sent, from any screen. */
+export function useIsSending(huntId: string): boolean {
+  return useIsMutating({ mutationKey: followUpKeys.sending(huntId) }) > 0;
 }
 
 export function useResendFailed(huntId: string) {

@@ -1,5 +1,6 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
+import { ClientResponseError } from 'pocketbase';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
 
 import { AttendanceCounters, InvitationGroup, type RowAction } from '@/components/attendance';
@@ -20,6 +21,7 @@ import {
   useCancelHunt,
   useHuntDetail,
   useInvitations,
+  useIsSending,
   useResendFailed,
   useSendInvitations,
   useSetParticipation,
@@ -58,7 +60,12 @@ function sendingError(error: unknown): string {
   if (error instanceof HuntActionError && SENDING_REFUSALS[error.code]) {
     return SENDING_REFUSALS[error.code];
   }
-  return "L'envoi n'a pas pu se faire. Vérifiez la connexion, puis réessayez.";
+  if (error instanceof ClientResponseError && error.status > 0) {
+    return "L'envoi n'a pas pu se faire. Réessayez dans un moment.";
+  }
+  // No answer: the sending (several minutes with a slow gateway phone) may go on on the server,
+  // which never sends a message twice; the statuses below tell what went out.
+  return "La connexion au serveur a été interrompue. Si l'envoi avait commencé, il continue sur le serveur : l'état des envois se met à jour ci-dessous.";
 }
 
 export default function HuntDetailScreen() {
@@ -75,6 +82,8 @@ export default function HuntDetailScreen() {
   const activeMembers = useActiveMemberCount(hunt?.status === 'draft');
   const send = useSendInvitations(id);
   const resend = useResendFailed(id);
+  // Shared by every screen of this hunt: opened again during a sending, it stays in progress.
+  const sending = useIsSending(id);
   const cancel = useCancelHunt(id);
   const setParticipation = useSetParticipation(id);
 
@@ -111,7 +120,7 @@ export default function HuntDetailScreen() {
 
   const day = formatLongDay(hunt.date);
   const open = hunt.status !== 'cancelled' && hunt.status !== 'closed';
-  const busy = send.isPending || resend.isPending || cancel.isPending;
+  const busy = sending || resend.isPending || cancel.isPending;
 
   const counts: Record<Participation, number> = {
     present: 0,
@@ -133,7 +142,7 @@ export default function HuntDetailScreen() {
 
   function sendInvitations() {
     setConfirmation(null);
-    if (send.isPending) return;
+    if (sending) return;
     setNotice(null);
     send.mutate(undefined, {
       onSuccess: (summary) => setNotice({ tone: 'success', text: formatSendSummary(summary) }),
@@ -241,13 +250,13 @@ export default function HuntDetailScreen() {
       </View>
 
       {hunt.status === 'draft' &&
-        (send.isPending ? (
+        (sending ? (
           <View className="gap-3">
             <Button size="lg" disabled aria-label="Envoi en cours">
               <ActivityIndicator className="text-muted-foreground" />
               <Text>Envoi en cours</Text>
             </Button>
-            <Text aria-live="polite">Envoi en cours… Cela peut prendre quelques secondes.</Text>
+            <Text aria-live="polite">Envoi en cours… Cela peut prendre quelques minutes.</Text>
           </View>
         ) : confirmation?.kind === 'send' ? (
           count === 0 ? (

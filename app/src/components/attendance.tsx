@@ -113,6 +113,8 @@ function InvitationRow({
   const waiting = [
     entry.sms_status === 'not_sent' && "SMS en attente d'envoi",
     entry.email_status === 'not_sent' && "E-mail en attente d'envoi",
+    entry.sms_status === 'sending' && "SMS en cours d'envoi",
+    entry.email_status === 'sending' && "E-mail en cours d'envoi",
   ].filter((item): item is string => Boolean(item));
   const name = entry.member.name || 'Adhérent supprimé';
 
