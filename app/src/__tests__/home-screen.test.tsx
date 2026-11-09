@@ -178,38 +178,79 @@ describe('HomeScreen', () => {
     ).toBeOnTheScreen();
   });
 
-  it('leaves the list shown when its refresh after an action fails', async () => {
-    const user = userEvent.setup();
-    const followUp = createInMemoryHuntFollowUp({
-      hunts: [{ ...aHunt({ id: 'hunt1', date: '2026-11-14' }), status: 'invitations_sent' }],
+  describe('when the refresh of the list fails after an action', () => {
+    const NOT_UPDATED = "La liste n'a pas pu être mise à jour. Vérifiez la connexion.";
+    const CARD = 'Ouvrir la battue du samedi 14 novembre';
+
+    /** Cancels a hunt from its screen while the list cannot be loaded, then waits for the failure. */
+    async function cancelWithListUnavailable() {
+      const user = userEvent.setup();
+      const followUp = createInMemoryHuntFollowUp({
+        hunts: [{ ...aHunt({ id: 'hunt1', date: '2026-11-14' }), status: 'invitations_sent' }],
+      });
+      const server = { listAvailable: true };
+      const list = jest.fn(async (): Promise<Hunt[]> => {
+        if (!server.listAvailable) throw new Error('network down');
+        return [await followUp.getHunt('hunt1')];
+      });
+      await renderScreens(
+        { index: HomeScreen, 'hunts/[id]': HuntDetailScreen },
+        { repository: { list, create: () => Promise.reject(new Error('not used')) }, followUp }
+      );
+
+      await user.press(await screen.findByRole('button', { name: CARD }));
+      await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
+      server.listAvailable = false;
+      await user.press(await screen.findByRole('button', { name: 'Oui, annuler la battue' }));
+      expect(
+        await screen.findByText('Battue annulée. Aucun adhérent à prévenir.')
+      ).toBeOnTheScreen();
+      await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+      await act(() => list.mock.results[1].value.catch(() => {}));
+      return { user, server };
+    }
+
+    it('keeps the list, says it is not up to date, and updates it with the retry', async () => {
+      const { user, server } = await cancelWithListUnavailable();
+      await act(() => router.back());
+
+      expect(await screen.findByRole('button', { name: CARD })).toBeOnTheScreen();
+      expect(await screen.findByText(NOT_UPDATED)).toBeOnTheScreen();
+      expect(
+        screen.queryByText('Impossible de charger les battues. Vérifiez la connexion.')
+      ).not.toBeOnTheScreen();
+
+      server.listAvailable = true;
+      await user.press(screen.getByRole('button', { name: 'Réessayer' }));
+
+      expect(await screen.findByRole('button', { name: `${CARD}, annulée` })).toBeOnTheScreen();
+      expect(screen.getByText('Annulée')).toBeOnTheScreen();
+      expect(screen.queryByText(NOT_UPDATED)).not.toBeOnTheScreen();
+      expect(screen.queryByRole('button', { name: 'Réessayer' })).not.toBeOnTheScreen();
     });
-    const repository: HuntRepository = {
-      list: jest
-        .fn<Promise<Hunt[]>, []>()
-        .mockResolvedValueOnce([await followUp.getHunt('hunt1')])
-        .mockRejectedValue(new Error('network down')),
-      create: () => Promise.reject(new Error('not used')),
-    };
-    await renderScreens(
-      { index: HomeScreen, 'hunts/[id]': HuntDetailScreen },
-      { repository, followUp }
-    );
 
-    await user.press(
-      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre' })
-    );
-    await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
-    await user.press(await screen.findByRole('button', { name: 'Oui, annuler la battue' }));
-    expect(await screen.findByText('Battue annulée. Aucun adhérent à prévenir.')).toBeOnTheScreen();
-    await waitFor(() => expect(repository.list).toHaveBeenCalledTimes(2));
-    await act(() => router.back());
+    it('updates the list by itself on the way back to the home screen', async () => {
+      const { server } = await cancelWithListUnavailable();
 
-    expect(
-      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre' })
-    ).toBeOnTheScreen();
-    expect(
-      screen.queryByText('Impossible de charger les battues. Vérifiez la connexion.')
-    ).not.toBeOnTheScreen();
+      server.listAvailable = true;
+      await act(() => router.back());
+
+      expect(await screen.findByRole('button', { name: `${CARD}, annulée` })).toBeOnTheScreen();
+      expect(screen.queryByText(NOT_UPDATED)).not.toBeOnTheScreen();
+    });
+
+    it('does not add this message to the error of a first loading', async () => {
+      const repository: HuntRepository = {
+        list: () => Promise.reject(new Error('network down')),
+        create: () => Promise.reject(new Error('not used')),
+      };
+      await renderScreens({ index: HomeScreen }, { repository });
+
+      expect(
+        await screen.findByText('Impossible de charger les battues. Vérifiez la connexion.')
+      ).toBeOnTheScreen();
+      expect(screen.queryByText(NOT_UPDATED)).not.toBeOnTheScreen();
+    });
   });
 
   it('leads to the SMS to check, with their number, only when there are some', async () => {
