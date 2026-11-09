@@ -109,7 +109,7 @@ describe('HuntDetailScreen', () => {
     });
 
     it.each([
-      ['invitations_sent', 'Invitations envoyées'],
+      ['invitations_sent', 'Invitations lancées'],
       ['cancelled', 'Annulée'],
       ['closed', 'Terminée'],
     ] as const)('shows the status %s', async (status, label) => {
@@ -155,7 +155,7 @@ describe('HuntDetailScreen', () => {
       expect(
         await screen.findByText('3 adhérents invités : 3 SMS envoyés, 3 e-mails envoyés.')
       ).toBeOnTheScreen();
-      expect(screen.getByText('Invitations envoyées')).toBeOnTheScreen();
+      expect(screen.getByText('Invitations lancées')).toBeOnTheScreen();
       expect(
         screen.queryByRole('button', { name: 'Envoyer les invitations' })
       ).not.toBeOnTheScreen();
@@ -370,7 +370,7 @@ describe('HuntDetailScreen', () => {
       await unmount();
       await renderScreens(routes, { initialUrl: '/hunts/hunt1', followUp, queryClient });
 
-      expect(await screen.findByText('Invitations envoyées')).toBeOnTheScreen();
+      expect(await screen.findByText('Invitations lancées')).toBeOnTheScreen();
       expect(await screen.findByRole('button', { name: 'Envoi en cours' })).toBeDisabled();
       expect(
         screen.getByText('Envoi en cours… Cela peut prendre quelques minutes.')
@@ -481,7 +481,7 @@ describe('HuntDetailScreen', () => {
       await followUp.sendInvitations('hunt1');
       await act(() => jest.advanceTimersByTimeAsync(ATTENDANCE_REFRESH_MS));
 
-      expect(await screen.findByText('Invitations envoyées')).toBeOnTheScreen();
+      expect(await screen.findByText('Invitations lancées')).toBeOnTheScreen();
       expect(
         screen.queryByRole('button', { name: 'Envoyer les invitations' })
       ).not.toBeOnTheScreen();
@@ -588,7 +588,7 @@ describe('HuntDetailScreen', () => {
       await user.press(await screen.findByRole('button', { name: 'Non, garder la battue' }));
 
       expect(cancel).not.toHaveBeenCalled();
-      expect(screen.getByText('Invitations envoyées')).toBeOnTheScreen();
+      expect(screen.getByText('Invitations lancées')).toBeOnTheScreen();
     });
 
     it('does not count the notices that did not go out as members told', async () => {
