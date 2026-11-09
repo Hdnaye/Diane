@@ -198,6 +198,16 @@ describe('PocketBase hunt follow-up', () => {
     }
   );
 
+  it('gives the reason when there is no default message template', async () => {
+    const { followUp } = setUp(() =>
+      refusal(409, { template: { code: 'no_default_template', message: 'Refused.' } })
+    );
+
+    await expect(followUp.sendInvitations('hunt1')).rejects.toMatchObject({
+      code: 'no_default_template',
+    });
+  });
+
   it('says when the server is not configured to send', async () => {
     const { followUp } = setUp(() => refusal(503));
 

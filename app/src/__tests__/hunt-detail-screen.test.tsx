@@ -222,6 +222,11 @@ describe('HuntDetailScreen', () => {
       ['hunt_cancelled', 'Cette battue est annulée : les invitations ne peuvent pas partir.'],
       ['hunt_closed', 'Cette battue est terminée : les invitations ne peuvent pas partir.'],
       [
+        'no_default_template',
+        'Aucun modèle de message par défaut : les invitations ne peuvent pas partir.',
+      ],
+      ['a_new_reason', "L'envoi n'a pas pu se faire. Réessayez dans un moment."],
+      [
         'server_not_configured',
         "Le serveur n'est pas configuré pour envoyer les invitations (adresse publique manquante).",
       ],
@@ -237,7 +242,7 @@ describe('HuntDetailScreen', () => {
       expect(await screen.findByText(message)).toBeOnTheScreen();
     });
 
-    it('says the sending may go on when the connection is lost', async () => {
+    it('says the sending may go on when no answer comes from the server', async () => {
       const user = userEvent.setup();
       const followUp = draft();
       jest.spyOn(followUp, 'sendInvitations').mockRejectedValue(new Error('network down'));
@@ -248,7 +253,7 @@ describe('HuntDetailScreen', () => {
 
       expect(
         await screen.findByText(
-          "La connexion au serveur a été interrompue. Si l'envoi avait commencé, il continue sur le serveur : l'état des envois se met à jour ci-dessous."
+          "La réponse du serveur n'est pas arrivée. Si l'envoi avait commencé, il peut continuer sur le serveur : l'état de chaque envoi s'affiche ci-dessous dès que le serveur est joignable."
         )
       ).toBeOnTheScreen();
     });
@@ -355,7 +360,7 @@ describe('HuntDetailScreen', () => {
       expect(screen.queryByText('SMS non envoyé')).not.toBeOnTheScreen();
       expect(screen.queryByRole('button', { name: 'Renvoyer les échecs' })).not.toBeOnTheScreen();
     });
-    it('shows a channel not attempted as waiting to be sent, not as a failure, and resends it', async () => {
+    it('shows a channel not attempted as not sent yet, not as a failure, and resends it', async () => {
       const user = userEvent.setup();
       const followUp = createInMemoryHuntFollowUp({
         hunts: [aHuntDetail({ status: 'invitations_sent' })],
@@ -372,15 +377,15 @@ describe('HuntDetailScreen', () => {
       });
       await openHunt(followUp);
 
-      expect(await screen.findByText("SMS en attente d'envoi")).toBeOnTheScreen();
+      expect(await screen.findByText('SMS pas encore envoyé')).toBeOnTheScreen();
       expect(screen.queryByText('SMS non envoyé')).not.toBeOnTheScreen();
       await user.press(screen.getByRole('button', { name: 'Renvoyer les échecs' }));
 
       expect(await screen.findByText('1 invitation renvoyée : 1 SMS envoyé.')).toBeOnTheScreen();
-      expect(screen.queryByText("SMS en attente d'envoi")).not.toBeOnTheScreen();
+      expect(screen.queryByText('SMS pas encore envoyé')).not.toBeOnTheScreen();
     });
 
-    it('counts the messages not attempted in the summary', async () => {
+    it('counts the messages not attempted in the summary and says what to do about them', async () => {
       const user = userEvent.setup();
       const followUp = draft();
       jest.spyOn(followUp, 'sendInvitations').mockResolvedValue({
@@ -394,7 +399,9 @@ describe('HuntDetailScreen', () => {
       await user.press(await screen.findByRole('button', { name: 'Envoyer' }));
 
       expect(
-        await screen.findByText("3 adhérents invités : 1 SMS envoyé, 2 SMS en attente d'envoi.")
+        await screen.findByText(
+          "3 adhérents invités : 1 SMS envoyé, 2 SMS pas encore envoyés. Le téléphone d'envoi ne répond pas : vérifiez-le, puis appuyez sur « Renvoyer les échecs »."
+        )
       ).toBeOnTheScreen();
     });
   });
@@ -550,6 +557,58 @@ describe('HuntDetailScreen', () => {
 
       expect(cancel).not.toHaveBeenCalled();
       expect(screen.getByText('Invitations envoyées')).toBeOnTheScreen();
+    });
+
+    it('does not count the notices that did not go out as members told', async () => {
+      const user = userEvent.setup();
+      const followUp = sentHunt();
+      jest.spyOn(followUp, 'cancelHunt').mockResolvedValue({
+        notified: 3,
+        sms: { sent: 1, failed: 1, skipped: 0, not_sent: 1 },
+        email: { sent: 0, failed: 0, skipped: 3, not_sent: 0 },
+      });
+      await openHunt(followUp);
+
+      await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
+      await user.press(await screen.findByRole('button', { name: 'Oui, annuler la battue' }));
+
+      expect(
+        await screen.findByText(
+          "Battue annulée. 3 adhérents concernés : 1 SMS envoyé, 2 SMS non envoyés. Prévenez directement ceux qui n'ont rien reçu."
+        )
+      ).toBeOnTheScreen();
+    });
+
+    it('does not say the hunt is not cancelled when no answer comes from the server', async () => {
+      const user = userEvent.setup();
+      const followUp = sentHunt();
+      jest.spyOn(followUp, 'cancelHunt').mockRejectedValue(new Error('network down'));
+      await openHunt(followUp);
+
+      await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
+      await user.press(await screen.findByRole('button', { name: 'Oui, annuler la battue' }));
+
+      expect(
+        await screen.findByText(
+          "La réponse du serveur n'est pas arrivée. L'annulation a pu être prise en compte : vérifiez le statut de la battue ci-dessus, et réessayez si elle n'est pas annulée."
+        )
+      ).toBeOnTheScreen();
+    });
+
+    it('says the hunt is not cancelled when the server answers with an error', async () => {
+      const user = userEvent.setup();
+      const followUp = sentHunt();
+      jest
+        .spyOn(followUp, 'cancelHunt')
+        .mockRejectedValue(new ClientResponseError({ status: 500 }));
+      await openHunt(followUp);
+
+      await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
+      await user.press(await screen.findByRole('button', { name: 'Oui, annuler la battue' }));
+
+      expect(
+        await screen.findByText("La battue n'a pas pu être annulée. Réessayez dans un moment.")
+      ).toBeOnTheScreen();
     });
 
     it('says when the server cannot cancel a hunt yet', async () => {
