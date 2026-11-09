@@ -24,21 +24,29 @@ export type HuntCalendarProps = {
   minDate?: string;
 };
 
-// Header and day names: the library only accepts raw values, read from the tokens.
-const DAY_WIDTH = remToPx(spacing['touch-min']); // same as the day cells (w-touch-min)
+// Header and day names: the library only accepts raw values, read from the tokens. Everything
+// shares the width of the screen (no fixed width: 7 days must fit a 320 pt wide phone) and the
+// library's margins are removed to keep the calendar short.
 const CALENDAR_THEME = {
   calendarBackground: colors.card.DEFAULT,
-  monthTextColor: colors.primary.DEFAULT,
-  textMonthFontFamily: fontFamily['sans-bold'][0],
-  textMonthFontSize: remToPx(fontSize.xl[0]),
   arrowColor: colors.primary.DEFAULT,
-  // Replaces the library's whole `dayHeader` style, whose 32 px width on a single line cuts
-  // the day names ("m…") in the readable font. Its margins are kept, as spacing tokens.
+  weekVerticalMargin: remToPx(spacing['calendar-week-gap']),
   'stylesheet.calendar.header': {
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    monthText: {
+      margin: 0,
+      fontFamily: fontFamily['sans-bold'][0],
+      fontSize: remToPx(fontSize.lg[0]),
+      color: colors.primary.DEFAULT,
+    },
+    arrow: { padding: 0 },
+    week: { flexDirection: 'row', justifyContent: 'space-around' },
+    // Replaces the library's whole `dayHeader` style, whose 32 px width on a single line cuts
+    // the day names ("m…") in the readable font. Its margins are kept, as spacing tokens.
     dayHeader: {
+      flex: 1,
       marginTop: remToPx(spacing['day-name-top']),
       marginBottom: remToPx(spacing['day-name-bottom']),
-      width: DAY_WIDTH,
       textAlign: 'center',
       fontFamily: fontFamily['sans-bold'][0],
       fontSize: remToPx(fontSize.xs[0]),
@@ -101,7 +109,7 @@ function DayCell({
   huntOpenable = false,
 }: DayCellProps & { huntOpenable?: boolean }) {
   if (!date) {
-    return <View className="h-touch-min w-touch-min" />;
+    return <View className="h-touch-min w-full" />;
   }
   const isToday = date.dateString === parisDay(new Date());
   const isHunt = Boolean(marking?.marked);
@@ -124,21 +132,25 @@ function DayCell({
       aria-disabled={isDisabled}
       disabled={isDisabled}
       onPress={() => onPress?.(date)}
-      className={cn(
-        'h-touch-min w-touch-min items-center justify-center rounded-full',
-        isToday && 'border-2 border-primary',
-        isHunt && 'bg-accent-light',
-        isSelected && 'bg-primary'
-      )}>
-      <Text
+      className="h-touch-min w-full items-center justify-center">
+      <View
+        testID={`day-mark-${date.dateString}`}
         className={cn(
-          isToday && 'font-sans-bold',
-          isHunt && 'text-foreground',
-          isSelected && 'text-primary-foreground',
-          !isHunt && !isSelected && state === 'disabled' && 'text-muted-foreground'
+          'h-calendar-day w-calendar-day items-center justify-center rounded-full',
+          isToday && 'border-2 border-primary',
+          isHunt && 'bg-accent-light',
+          isSelected && 'bg-primary'
         )}>
-        {date.day}
-      </Text>
+        <Text
+          className={cn(
+            isToday && 'font-sans-bold',
+            isHunt && 'text-foreground',
+            isSelected && 'text-primary-foreground',
+            !isHunt && !isSelected && state === 'disabled' && 'text-muted-foreground'
+          )}>
+          {date.day}
+        </Text>
+      </View>
     </Pressable>
   );
 }
