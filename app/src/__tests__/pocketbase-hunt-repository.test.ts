@@ -83,6 +83,7 @@ describe('PocketBase hunt repository', () => {
         meeting_time: '08:00',
         max_participants: 12,
         response_deadline: '2026-11-09T19:00:00.000Z',
+        status: 'draft',
       },
       {
         id: 'hunt2',
@@ -91,6 +92,7 @@ describe('PocketBase hunt repository', () => {
         // 0 in PocketBase: no limit.
         max_participants: null,
         response_deadline: '2026-11-09T19:00:00.000Z',
+        status: 'draft',
       },
     ]);
     expect(requests[0].path).toBe(AUTH_PATH);

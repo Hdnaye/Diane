@@ -1,8 +1,10 @@
 import { act, userEvent } from '@testing-library/react-native';
+import { router } from 'expo-router';
 import { screen } from 'expo-router/testing-library';
 import { Text } from 'react-native';
 
 import HomeScreen from '@/app/index';
+import HuntDetailScreen from '@/app/hunts/[id]';
 import NewHuntScreen from '@/app/hunts/new';
 import { createInMemoryHuntFollowUp } from '@/data/hunt-follow-up';
 import { REVIEW_REFRESH_MS } from '@/data/hunt-follow-up-queries';
@@ -125,6 +127,55 @@ describe('HomeScreen', () => {
 
     expect(await screen.findByText('Fiche de la battue')).toBeOnTheScreen();
     expect(screen).toHavePathname('/hunts/hunt-2026-11-21');
+  });
+
+  it('says on its card that a hunt is cancelled', async () => {
+    await renderScreens(
+      { index: HomeScreen },
+      { hunts: [aHunt({ id: 'hunt1', date: '2026-11-14', status: 'cancelled' })] }
+    );
+
+    expect(
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre, annulée' })
+    ).toBeOnTheScreen();
+    expect(screen.getByText('Annulée')).toBeOnTheScreen();
+  });
+
+  it('shows no status on the card of a hunt not cancelled', async () => {
+    await renderScreens({ index: HomeScreen }, { hunts: [aHunt({ date: '2026-11-14' })] });
+
+    expect(
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre' })
+    ).toBeOnTheScreen();
+    expect(screen.queryByText('Annulée')).not.toBeOnTheScreen();
+  });
+
+  it('refreshes the list after a hunt is cancelled from its screen', async () => {
+    const user = userEvent.setup();
+    const followUp = createInMemoryHuntFollowUp({
+      hunts: [{ ...aHunt({ id: 'hunt1', date: '2026-11-14' }), status: 'invitations_sent' }],
+    });
+    // The list and the screen of the hunt read the same data, as on the server.
+    const repository: HuntRepository = {
+      list: async () => [await followUp.getHunt('hunt1')],
+      create: () => Promise.reject(new Error('not used')),
+    };
+    await renderScreens(
+      { index: HomeScreen, 'hunts/[id]': HuntDetailScreen },
+      { repository, followUp }
+    );
+
+    await user.press(
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre' })
+    );
+    await user.press(await screen.findByRole('button', { name: 'Annuler la battue' }));
+    await user.press(await screen.findByRole('button', { name: 'Oui, annuler la battue' }));
+    expect(await screen.findByText('Battue annulée. Aucun adhérent à prévenir.')).toBeOnTheScreen();
+    await act(() => router.back());
+
+    expect(
+      await screen.findByRole('button', { name: 'Ouvrir la battue du samedi 14 novembre, annulée' })
+    ).toBeOnTheScreen();
   });
 
   it('leads to the SMS to check, with their number, only when there are some', async () => {
