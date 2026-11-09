@@ -83,7 +83,7 @@ const REVIEW_REASONS: Record<string, string> = {
   unknown_sender: 'Numéro inconnu',
   inactive_member: 'Adhérent inactif',
   unrecognized: 'Réponse non comprise',
-  no_open_invitation: 'Aucune battue ouverte pour cet adhérent',
+  no_open_invitation: 'Aucune battue ouverte',
   several_open_invitations: 'Plusieurs battues ouvertes, jour non précisé',
   unknown_day: 'Aucune battue ouverte le jour indiqué',
   ambiguous_day: 'Jour indiqué ambigu',
